@@ -39,7 +39,7 @@ export default function LookbookSection() {
             <div>
               <div className="relative aspect-square overflow-hidden bg-black">
                 <Image
-                  src="/img/corte-1.png"
+                  src="/corte-1.png"
                   alt="Low Skin Fade y Textured Crop en Peña Barber"
                   fill
                   className="object-cover group-hover:scale-105 transition-transform duration-500"
@@ -76,7 +76,7 @@ export default function LookbookSection() {
             <div>
               <div className="relative aspect-square overflow-hidden bg-black">
                 <Image
-                  src="/img/corte-2.png"
+                  src="/corte-2.png"
                   alt="Taper Clásico y Barba Esculpida por Mateo Peña"
                   fill
                   className="object-cover group-hover:scale-105 transition-transform duration-500"
@@ -110,7 +110,7 @@ export default function LookbookSection() {
             <div>
               <div className="relative aspect-square overflow-hidden bg-black">
                 <Image
-                  src="/img/corte-3.png"
+                  src="/corte-3.png"
                   alt="Modern Mullet y Pompadour Editorial"
                   fill
                   className="object-cover group-hover:scale-105 transition-transform duration-500"

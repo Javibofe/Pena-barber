@@ -18,7 +18,7 @@ export default function HeroSection() {
         
         <div className="text-center max-w-4xl mx-auto mb-8 flex flex-col items-center">
           <Image 
-            src="/img/logo-pena.jpg" 
+            src="/og-image.jpg" 
             alt="Peña Barber" 
             width={400} 
             height={150} 
