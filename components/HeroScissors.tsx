@@ -2,7 +2,7 @@
 
 import { useRef } from "react";
 import Image from "next/image";
-import { motion, useScroll, useTransform } from "framer-motion";
+import { motion, useScroll, useTransform, useMotionTemplate } from "framer-motion";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tijeras verticales realistas: anillas abajo, puntas arriba.
@@ -33,24 +33,24 @@ function ScissorsSVG({
     >
       <defs>
         <linearGradient id="sg-bladeL" x1="1" y1="0" x2="0" y2="0">
-          <stop offset="0%"   stopColor="#444" />
-          <stop offset="30%"  stopColor="#c0c0c0" />
-          <stop offset="55%"  stopColor="#e0e0e0" />
+          <stop offset="0%" stopColor="#444" />
+          <stop offset="30%" stopColor="#c0c0c0" />
+          <stop offset="55%" stopColor="#e0e0e0" />
           <stop offset="100%" stopColor="#777" />
         </linearGradient>
         <linearGradient id="sg-bladeR" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%"   stopColor="#777" />
-          <stop offset="45%"  stopColor="#e0e0e0" />
-          <stop offset="70%"  stopColor="#c0c0c0" />
+          <stop offset="0%" stopColor="#777" />
+          <stop offset="45%" stopColor="#e0e0e0" />
+          <stop offset="70%" stopColor="#c0c0c0" />
           <stop offset="100%" stopColor="#444" />
         </linearGradient>
         <radialGradient id="sg-ring" cx="38%" cy="38%" r="55%">
-          <stop offset="0%"  stopColor="#e8e8e8" />
+          <stop offset="0%" stopColor="#e8e8e8" />
           <stop offset="65%" stopColor="#b0b0b0" />
           <stop offset="100%" stopColor="#555" />
         </radialGradient>
         <radialGradient id="sg-screw" cx="35%" cy="35%" r="55%">
-          <stop offset="0%"  stopColor="#ddd" />
+          <stop offset="0%" stopColor="#ddd" />
           <stop offset="55%" stopColor="#888" />
           <stop offset="100%" stopColor="#222" />
         </radialGradient>
@@ -65,7 +65,7 @@ function ScissorsSVG({
         {/* Anilla relleno metálico */}
         <circle cx="16" cy="188" r="15.5" fill="url(#sg-ring)" />
         {/* Agujero del dedo */}
-        <circle cx="16" cy="188" r="8"  fill="none" stroke="#444" strokeWidth="2" />
+        <circle cx="16" cy="188" r="8" fill="none" stroke="#444" strokeWidth="2" />
         {/* Brazo que conecta anilla con pivote */}
         <path
           d="M26 170 Q32 145 40 105"
@@ -94,7 +94,7 @@ function ScissorsSVG({
         {/* Anilla exterior */}
         <circle cx="64" cy="188" r="20" fill="none" stroke="#111" strokeWidth="4.5" />
         <circle cx="64" cy="188" r="15.5" fill="url(#sg-ring)" />
-        <circle cx="64" cy="188" r="8"  fill="none" stroke="#444" strokeWidth="2" />
+        <circle cx="64" cy="188" r="8" fill="none" stroke="#444" strokeWidth="2" />
         {/* Brazo */}
         <path
           d="M54 170 Q48 145 40 105"
@@ -117,23 +117,19 @@ function ScissorsSVG({
       </motion.g>
 
       {/* ── Tornillo del pivote ── */}
-      <circle cx={PX} cy={PY} r="10"  fill="#111" />
-      <circle cx={PX} cy={PY} r="7"   fill="url(#sg-screw)" />
+      <circle cx={PX} cy={PY} r="10" fill="#111" />
+      <circle cx={PX} cy={PY} r="7" fill="url(#sg-screw)" />
       <circle cx={PX} cy={PY} r="2.5" fill="#ccc" />
     </svg>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Fases de animación (600vh = 6 pantallas de scroll)
+// Fases de animación (Nueva Lógica - Fase 1: Desprendimiento)
 //
-//  0.00 → 0.15  IDLE        — Logo en blanco, sin tijeras visibles
-//  0.14 → 0.42  ENTRADA     — Tijeras suben desde abajo, rotan al ángulo de la A (~35°)
-//  0.40 → 0.53  LOGO        — Tijeras en posición A, se abren en X (integrándose al logo)
-//  0.51 → 0.63  TRANSICIÓN  — Tijeras vuelven a vertical (0°), logo se desvanece
-//  0.61 → 0.88  CORTE       — Tijeras suben mientras oscilan abierto/cerrado
-//                              Las dos mitades del logo/fondo blanco se separan L/R
-//  0.86 → 0.97  FINAL       — Mitades salen de pantalla, tijeras se desvanecen
+//  0.00 → 0.10  IDLE       — SVG disfrazado como las tijeras de la "A"
+//  0.10 → 0.30  SALIDA     — Las tijeras se desprenden, rotan y van hacia arriba
+//  0.30 → 0.60  ESPERANDO  — (A la espera de los siguientes fotogramas)
 // ─────────────────────────────────────────────────────────────────────────────
 export default function HeroScissors() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -144,78 +140,130 @@ export default function HeroScissors() {
   });
 
   // ── Tijeras: posición Y ──────────────────────────────────────────
-  // Empieza debajo de la pantalla, sube a la posición A, luego corta hacia arriba
+  // 0.00 → 0.10: en la A (+25px)
+  // 0.10 → 0.25: suben al centro arriba (-25vh)
+  // 0.25 → 0.35: rotan y se preparan
+  // 0.35 → 0.85: bajan cortando (110vh)
   const scissorsY = useTransform(
     scrollYProgress,
-    [0,      0.14,  0.16,  0.44,  0.53,  0.88],
-    ["70vh", "70vh","45vh","-7vh","-7vh","-70vh"]
+    [0, 0.10, 0.25, 0.35, 0.85],
+    ["25px", "25px", "-25vh", "-25vh", "110vh"]
   );
 
-  // ── Tijeras: rotación ────────────────────────────────────────────
-  // 0° (vertical) → 35° (ángulo logo A) → 0° (vertical para cortar)
+  // ── Tijeras: posición X ──────────────────────────────────────────
+  // 0.00 → 0.10: en la A (+80px)
+  // 0.10 → 0.25: se centran (0px) para cortar por el medio
+  const scissorsX = useTransform(
+    scrollYProgress,
+    [0, 0.10, 0.25, 0.85],
+    ["80px", "80px", "0px", "0px"]
+  );
+
+  // ── Tijeras: rotación ───────────────────────────────────────────
+  // 0.00 → 0.10: inclinadas como la A (-72 deg)
+  // 0.10 → 0.25: giran a 15 (abriendo en el aire)
+  // 0.25 → 0.35: giran a 180 (apuntando hacia abajo para cortar)
   const scissorsRotate = useTransform(
     scrollYProgress,
-    [0.16, 0.44, 0.53, 0.63],
-    [0, 35, 35, 0]
+    [0, 0.10, 0.25, 0.35, 0.85],
+    [-72, -72, 15, 180, 180]
   );
 
   // ── Tijeras: escala ──────────────────────────────────────────────
+  // Pequeñitas en la A, grandes para cortar
   const scissorsScale = useTransform(
     scrollYProgress,
-    [0.14, 0.16, 0.44, 0.63],
-    [0.65, 0.65, 1.0, 1.1]
+    [0, 0.10, 0.25, 0.85],
+    [0.32, 0.32, 1.2, 1.2]
   );
 
   // ── Tijeras: opacidad ────────────────────────────────────────────
   const scissorsOpacity = useTransform(
     scrollYProgress,
-    [0, 0.13, 0.16, 0.88, 0.96],
-    [0, 0, 1, 1, 0]
-  );
-
-  // ── Hojas: ángulo de apertura ────────────────────────────────────
-  // En posición A: abiertas en X (±30°)
-  // En corte:      oscilan abierto/cerrado
-  const leftBladeAngle = useTransform(
-    scrollYProgress,
-    [0.16, 0.44, 0.51, 0.63, 0.69, 0.75, 0.81, 0.87],
-    [0, -30, -30, 0, -22, 0, -22, -8]
-  );
-  const rightBladeAngle = useTransform(
-    scrollYProgress,
-    [0.16, 0.44, 0.51, 0.63, 0.69, 0.75, 0.81, 0.87],
-    [0, 30, 30, 0, 22, 0, 22, 8]
-  );
-
-  // ── Logo: opacidad ───────────────────────────────────────────────
-  // Logo visible hasta que empieza el corte
-  const logoOpacity = useTransform(
-    scrollYProgress,
-    [0, 0.53, 0.64],
+    [0, 0.85, 0.95],
     [1, 1, 0]
   );
 
-  // ── Paneles blancos: separación L/R ─────────────────────────────
-  // Mitad izquierda se desliza a la izquierda, derecha a la derecha.
-  // clip-path: inset() recorta cada panel a su mitad, el translate los aleja.
+  // ── Hojas: ángulo de apertura (SNIPPING) ──────────────────────────
+  // 0.00 → 0.10: cruzadas en la A
+  // 0.10 → 0.25: se abren en el aire
+  // 0.35 → 0.85: snip snip snip mientras bajan
+  const leftBladeAngle = useTransform(
+    scrollYProgress,
+    [0, 0.10, 0.25, 0.35, 0.45, 0.55, 0.65, 0.75, 0.85],
+    [-15, -15, -35, -35, -5, -35, -5, -35, -5]
+  );
+  const rightBladeAngle = useTransform(
+    scrollYProgress,
+    [0, 0.10, 0.25, 0.35, 0.45, 0.55, 0.65, 0.75, 0.85],
+    [15, 15, 35, 35, 5, 35, 5, 35, 5]
+  );
+
+  // ── Logo: opacidad ───────────────────────────────────────────────
+  const logoOpacity = useTransform(
+    scrollYProgress,
+    [0, 0.70, 0.80],
+    [1, 1, 0]
+  );
+
+  // ── Paneles blancos: CLIP POLIGONAL (CORTE VERTICAL DESDE ARRIBA) ──
+  // La física real del corte:
+  // Tijeras cortan de arriba a abajo en el centro exacto (50%).
+  
+  // Progreso del corte en Y (0 a 100%)
+  const cutY = useTransform(
+    scrollYProgress,
+    [0.35, 0.85],
+    [0, 100]
+  );
+
+  // Separación superior: forma de V
+  // Cuando la tijera baja, la parte superior se separa (efecto rasgado).
+  const topSeparation = useTransform(
+    scrollYProgress,
+    [0.35, 0.85],
+    [0, 25] // 25% de separación para cada lado
+  );
+
+  const leftEdgeTop = useTransform(topSeparation, (v) => 50 - v);
+  const rightEdgeTop = useTransform(topSeparation, (v) => 50 + v);
+
+  // Panel izquierdo: (0% 0%) -> (leftEdgeTop% 0%) -> (50% cutY%) -> (50% 100%) -> (0% 100%)
+  const leftClipPath = useMotionTemplate`polygon(0% 0%, ${leftEdgeTop}% 0%, 50% ${cutY}%, 50% 100%, 0% 100%)`;
+  
+  // Panel derecho: (rightEdgeTop% 0%) -> (100% 0%) -> (100% 100%) -> (50% 100%) -> (50% cutY%)
+  const rightClipPath = useMotionTemplate`polygon(${rightEdgeTop}% 0%, 100% 0%, 100% 100%, 50% 100%, 50% ${cutY}%)`;
+
+  // Desplazamiento final (fase de salida de pantalla)
   const leftPanelX = useTransform(
     scrollYProgress,
-    [0.61, 0.93],
-    ["0%", "-58%"]
+    [0.85, 0.98],
+    ["0%", "-60%"]
   );
+  const leftPanelRotate = useTransform(
+    scrollYProgress,
+    [0.85, 0.98],
+    [0, -6]
+  );
+  
   const rightPanelX = useTransform(
     scrollYProgress,
-    [0.61, 0.93],
-    ["0%", "58%"]
+    [0.85, 0.98],
+    ["0%", "60%"]
   );
+  const rightPanelRotate = useTransform(
+    scrollYProgress,
+    [0.85, 0.98],
+    [0, 6]
+  );
+
   const panelsOpacity = useTransform(
     scrollYProgress,
-    [0.90, 0.97],
+    [0.91, 0.98],
     [1, 0]
   );
 
   return (
-    // 600vh = 6 pantallas de scroll para una animación fluida
     <div ref={containerRef} className="relative h-[600vh]">
 
       {/* ══════════════════════════════════════════════════════
@@ -243,58 +291,67 @@ export default function HeroScissors() {
 
       {/* ══════════════════════════════════════════════════════
           CAPA 30 — Mitad IZQUIERDA del folio blanco
-          clip-path recorta al 50% izquierdo, translateX lo aleja
+          Clip poligonal: borde inferior se retira progresivamente
+          conforme las tijeras avanzan (parte ya cortada → más separada)
       ══════════════════════════════════════════════════════ */}
       <motion.div
         className="fixed inset-0 bg-white z-30"
         style={{
-          clipPath: "inset(0 50% 0 0)",
+          clipPath: leftClipPath,
           x: leftPanelX,
           opacity: panelsOpacity,
-          willChange: "transform, opacity",
+          willChange: "clip-path, transform, opacity",
         }}
       >
         <motion.div
           className="absolute inset-0 flex items-center justify-center"
           style={{ opacity: logoOpacity, willChange: "opacity" }}
         >
-          <Image
-            src="/logo-pena.jpg"
-            alt="Peña Barber"
-            width={420}
-            height={280}
-            priority
-            className="select-none"
-            style={{ filter: "contrast(1.1)" }}
-          />
+          <div className="relative">
+            <Image
+              src="/logo-pena.jpg"
+              alt="Peña Barber"
+              width={420}
+              height={280}
+              priority
+              className="select-none"
+              style={{ filter: "contrast(1.1)" }}
+            />
+            {/* Parche blanco para tapar las tijeras impresas en la imagen */}
+            <div className="absolute top-[52%] left-[69.5%] w-[45px] h-[75px] bg-[#fff] -translate-x-1/2 -translate-y-1/2 rotate-[18deg] rounded-full" />
+          </div>
         </motion.div>
       </motion.div>
 
       {/* ══════════════════════════════════════════════════════
-          CAPA 30 — Mitad DERECHA del folio blanco
+          CAPA 31 — Mitad DERECHA del folio blanco
       ══════════════════════════════════════════════════════ */}
       <motion.div
         className="fixed inset-0 bg-white z-30"
         style={{
-          clipPath: "inset(0 0 0 50%)",
+          clipPath: rightClipPath,
           x: rightPanelX,
           opacity: panelsOpacity,
-          willChange: "transform, opacity",
+          willChange: "clip-path, transform, opacity",
         }}
       >
         <motion.div
           className="absolute inset-0 flex items-center justify-center"
           style={{ opacity: logoOpacity, willChange: "opacity" }}
         >
-          <Image
-            src="/logo-pena.jpg"
-            alt="Peña Barber"
-            width={420}
-            height={280}
-            priority
-            className="select-none"
-            style={{ filter: "contrast(1.1)" }}
-          />
+          <div className="relative">
+            <Image
+              src="/logo-pena.jpg"
+              alt="Peña Barber"
+              width={420}
+              height={280}
+              priority
+              className="select-none"
+              style={{ filter: "contrast(1.1)" }}
+            />
+            {/* Parche blanco para tapar las tijeras impresas en la imagen */}
+            <div className="absolute top-[52%] left-[69.5%] w-[45px] h-[75px] bg-[#fff] -translate-x-1/2 -translate-y-1/2 rotate-[18deg] rounded-full" />
+          </div>
         </motion.div>
       </motion.div>
 
@@ -304,11 +361,13 @@ export default function HeroScissors() {
       <motion.div
         className="fixed left-1/2 top-1/2 z-40"
         style={{
-          x: "-50%",
+          x: scissorsX,
           y: scissorsY,
           rotate: scissorsRotate,
           scale: scissorsScale,
           opacity: scissorsOpacity,
+          marginLeft: "-36px", // compensar la mitad del width del svg para que X sea centro
+          marginTop: "-94px",  // compensar la mitad del height del svg
           willChange: "transform, opacity",
         }}
       >

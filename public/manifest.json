@@ -1,0 +1,21 @@
+{
+  "name": "Peña Barber",
+  "short_name": "Peña Barber",
+  "display": "standalone",
+  "start_url": "/",
+  "orientation": "portrait",
+  "background_color": "#080808",
+  "theme_color": "#080808",
+  "icons": [
+    {
+      "src": "/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
