@@ -2,27 +2,26 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import InstallPrompt from "@/components/InstallPrompt";
 //prueba1
 export const viewport: Viewport = {
   themeColor: "#080808",
 };
 
 export const metadata: Metadata = {
-  title: { 
-    default: "Peña Barber | Peluquería y Barbería", 
-    template: "%s | Peña Barber" 
+  title: {
+    default: "Peña Barber | Peluquería y Barbería",
+    template: "%s | Peña Barber"
   },
   description: "Tu barbería de confianza. Cortes de pelo, arreglos de barba y trato cercano. Reserva tu cita online rápido y sin complicaciones.",
-  openGraph: { 
-    type: "website", 
+  openGraph: {
+    type: "website",
     locale: "es_ES",
     images: ["/og-image.jpg"]
   },
-  appleWebApp: { 
-    capable: true, 
-    title: "Peña Barber", 
-    statusBarStyle: "black-translucent" 
+  appleWebApp: {
+    capable: true,
+    title: "Peña Barber",
+    statusBarStyle: "black-translucent"
   },
   manifest: "/manifest.json"
 };
