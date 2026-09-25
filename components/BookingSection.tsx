@@ -155,7 +155,7 @@ export default function BookingSection() {
     }
 
     setIsLoading(true);
-
+    //prueba
     try {
       // Paso A: Upsert de Cliente
       const { data: clientData, error: clientError } = await supabase
@@ -271,11 +271,10 @@ export default function BookingSection() {
                     transition={{ duration: 0.4, delay: index * 0.1 }}
                     key={srv.id}
                     onClick={() => setSelectedService(srv)}
-                    className={`text-left p-4 rounded transition-all flex flex-col justify-between border-2 ${
-                      selectedService.id === srv.id
+                    className={`text-left p-4 rounded transition-all flex flex-col justify-between border-2 ${selectedService.id === srv.id
                         ? "bg-surface-elevated border-white"
                         : "bg-surface-card border-border-subtle hover:border-neutral-500"
-                    }`}
+                      }`}
                     type="button"
                   >
                     <div>
@@ -322,7 +321,7 @@ export default function BookingSection() {
                     ))}
                   </select>
                   <svg className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-neutral-400" width="12" height="12" viewBox="0 0 12 12" fill="none">
-                    <path d="M2 4L6 8L10 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M2 4L6 8L10 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 </div>
               </div>
@@ -360,13 +359,12 @@ export default function BookingSection() {
                         setSelectedDateStr(fullDate);
                         setSelectedHour("");
                       }}
-                      className={`py-3 rounded text-center text-xs font-mono transition-colors ${
-                        isDisabled
+                      className={`py-3 rounded text-center text-xs font-mono transition-colors ${isDisabled
                           ? "opacity-20 text-neutral-500 cursor-not-allowed"
                           : isSelected
-                          ? "bg-white text-black font-bold shadow-[0_0_15px_rgba(255,255,255,0.4)]"
-                          : "text-neutral-300 hover:bg-neutral-800 bg-surface-elevated/50"
-                      }`}
+                            ? "bg-white text-black font-bold shadow-[0_0_15px_rgba(255,255,255,0.4)]"
+                            : "text-neutral-300 hover:bg-neutral-800 bg-surface-elevated/50"
+                        }`}
                       type="button"
                     >
                       {day}
@@ -410,11 +408,10 @@ export default function BookingSection() {
                         <button
                           key={hour}
                           onClick={() => setSelectedHour(hour)}
-                          className={`py-2 rounded text-center text-xs font-mono transition-all border ${
-                            selectedHour === hour
+                          className={`py-2 rounded text-center text-xs font-mono transition-all border ${selectedHour === hour
                               ? "bg-white text-black font-bold border-white"
                               : "border-border-light hover:border-white text-neutral-300 bg-surface-elevated/50"
-                          }`}
+                            }`}
                           type="button"
                         >
                           {hour}
@@ -528,13 +525,12 @@ export default function BookingSection() {
                   disabled={!isLegalAccepted || isLoading || !!bookingMessage}
                   whileHover={isLegalAccepted && !isLoading && !bookingMessage ? { scale: 1.02 } : {}}
                   whileTap={isLegalAccepted && !isLoading && !bookingMessage ? { scale: 0.98 } : {}}
-                  className={`w-full py-3 rounded font-semibold text-xs tracking-[0.18em] uppercase transition-all flex items-center justify-center gap-2 ${
-                    !isLegalAccepted
+                  className={`w-full py-3 rounded font-semibold text-xs tracking-[0.18em] uppercase transition-all flex items-center justify-center gap-2 ${!isLegalAccepted
                       ? "bg-white/50 text-black/50 cursor-not-allowed"
                       : bookingMessage
-                      ? "bg-neutral-800 text-white"
-                      : "bg-white text-black hover:bg-neutral-200"
-                  }`}
+                        ? "bg-neutral-800 text-white"
+                        : "bg-white text-black hover:bg-neutral-200"
+                    }`}
                   type="button"
                 >
                   {isLoading ? (
