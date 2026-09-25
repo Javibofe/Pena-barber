@@ -3,7 +3,7 @@ import "./globals.css";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import InstallPrompt from "@/components/InstallPrompt";
-//prueba1
+//prueba1.2
 export const viewport: Viewport = {
   themeColor: "#080808",
 };
