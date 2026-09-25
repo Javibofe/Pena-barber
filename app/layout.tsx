@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import InstallPrompt from "@/components/InstallPrompt";
 //prueba1
 export const viewport: Viewport = {
   themeColor: "#080808",
@@ -37,6 +38,7 @@ export default function RootLayout({
         <Header />
         {children}
         <Footer />
+        <InstallPrompt />
       </body>
     </html>
   );

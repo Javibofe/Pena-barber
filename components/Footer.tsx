@@ -55,6 +55,7 @@ export default function Footer() {
       <div className="max-w-6xl mx-auto mt-12 pt-6 border-t border-border-subtle flex flex-col sm:flex-row items-center justify-between text-[11px] font-mono text-neutral-500">
         <p>© 2026 Peña Barber — Germán Peña. Todos los derechos reservados.</p>
         <div className="flex gap-4 mt-2 sm:mt-0">
+          <a className="hover:text-white transition-colors" href="/admin">¿Eres peluquero?</a>
           <a className="hover:text-white transition-colors" href="#">Aviso Legal</a>
           <a className="hover:text-white transition-colors" href="#">Privacidad</a>
           <a className="hover:text-white transition-colors" href="#">Términos de Cita</a>
