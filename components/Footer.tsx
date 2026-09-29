@@ -27,10 +27,23 @@ export default function Footer() {
 
         <div>
           <h4 className="text-xs uppercase tracking-widest font-mono text-white mb-3">Horario</h4>
-          <ul className="text-xs text-neutral-400 space-y-1 font-light">
-            <li className="flex justify-between"><span>Martes a Viernes:</span> <span className="text-white font-mono">10:00 – 20:30</span></li>
-            <li className="flex justify-between"><span>Sábados:</span> <span className="text-white font-mono">09:30 – 19:00</span></li>
-            <li className="flex justify-between text-neutral-500"><span>Domingos y Lunes:</span> <span>Cerrado</span></li>
+          <ul className="text-xs text-neutral-400 space-y-3 font-light">
+            <li className="flex flex-col">
+              <span className="text-white font-medium mb-1">Lunes y Martes</span>
+              <span className="font-mono text-neutral-300">15:00 – 19:00</span>
+            </li>
+            <li className="flex flex-col">
+              <span className="text-white font-medium mb-1">Miércoles</span>
+              <span className="font-mono text-neutral-300">15:00 – 21:00</span>
+            </li>
+            <li className="flex flex-col">
+              <span className="text-white font-medium mb-1">Jueves y Viernes</span>
+              <span className="font-mono text-neutral-300">09:00 – 13:30 &nbsp;|&nbsp; 15:00 – 21:00</span>
+            </li>
+            <li className="flex flex-col pt-1">
+              <span className="text-neutral-500 font-medium mb-1">Sábados y Domingos</span>
+              <span className="font-mono text-neutral-600">Cerrado</span>
+            </li>
           </ul>
         </div>
 
@@ -56,9 +69,9 @@ export default function Footer() {
         <p>© 2026 Peña Barber — Germán Peña. Todos los derechos reservados.</p>
         <div className="flex gap-4 mt-2 sm:mt-0">
           <a className="hover:text-white transition-colors" href="/admin">¿Eres peluquero?</a>
-          <a className="hover:text-white transition-colors" href="#">Aviso Legal</a>
-          <a className="hover:text-white transition-colors" href="#">Privacidad</a>
-          <a className="hover:text-white transition-colors" href="#">Términos de Cita</a>
+          <a className="hover:text-white transition-colors" href="/aviso-legal">Aviso Legal</a>
+          <a className="hover:text-white transition-colors" href="/privacidad">Privacidad</a>
+          <a className="hover:text-white transition-colors" href="/terminos">Términos de Cita</a>
         </div>
       </div>
     </footer>

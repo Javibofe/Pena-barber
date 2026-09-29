@@ -49,17 +49,10 @@ export default function LookbookSection() {
                   Fade & Textura
                 </div>
               </div>
-              <div className="p-6">
-                <div className="flex justify-between items-baseline mb-2">
-                  <h3 className="font-serif text-lg text-white font-medium">
-                    Low Skin Fade & Textured Crop
-                  </h3>
-                </div>
-                <p className="text-xs text-neutral-400 leading-relaxed font-light">
-                  Degradado a ras desde cero bajo la nuca, textura francesa
-                  cortada a navaja en coronilla y perfilado frontal geométrico
-                  milimétrico.
-                </p>
+              <div className="p-5 text-center">
+                <h3 className="font-serif text-lg text-white font-medium">
+                  Low Skin Fade & Textured Crop
+                </h3>
               </div>
             </div>
           </motion.article>
@@ -85,15 +78,10 @@ export default function LookbookSection() {
                   Taper & Textura
                 </div>
               </div>
-              <div className="p-6">
-                <div className="flex justify-between items-baseline mb-2">
-                  <h3 className="font-serif text-lg text-white font-medium">
-                    Taper & Textura
-                  </h3>
-                </div>
-                <p className="text-xs text-neutral-400 leading-relaxed font-light">
-                  [añadir texto opcional]
-                </p>
+              <div className="p-5 text-center">
+                <h3 className="font-serif text-lg text-white font-medium">
+                  Taper & Textura
+                </h3>
               </div>
             </div>
           </motion.article>
@@ -119,15 +107,10 @@ export default function LookbookSection() {
                   Tijera & Fade
                 </div>
               </div>
-              <div className="p-6">
-                <div className="flex justify-between items-baseline mb-2">
-                  <h3 className="font-serif text-lg text-white font-medium">
-                    Modern Mullet
-                  </h3>
-                </div>
-                <p className="text-xs text-neutral-400 leading-relaxed font-light pb-4">
-                  [añadir texto opcional]
-                </p>
+              <div className="p-5 text-center">
+                <h3 className="font-serif text-lg text-white font-medium">
+                  Modern Mullet
+                </h3>
               </div>
             </div>
           </motion.article>

@@ -7,9 +7,9 @@ export default function Header() {
   const [isOpen, setIsOpen] = useState(false);
 
   const menuItems = [
-    { name: "Cortes Reales", href: "#trabajos" },
-    { name: "Horarios", href: "#reserva" },
-    { name: "Opiniones", href: "#opiniones" },
+    { name: "Cortes Reales", href: "/#trabajos" },
+    { name: "Horarios", href: "/#reserva" },
+    { name: "Opiniones", href: "/#opiniones" },
   ];
 
   return (
@@ -21,7 +21,7 @@ export default function Header() {
         className="fixed top-0 left-0 right-0 z-50 bg-[#080808]/90 backdrop-blur-md border-b border-border-subtle transition-all duration-300"
       >
         <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-          <a className="flex items-center gap-3 group" href="#">
+          <a className="flex items-center gap-3 group" href="/">
             <div className="w-8 h-8 rounded-full border border-white/40 flex items-center justify-center text-white text-xs font-serif font-bold group-hover:border-white transition-colors">
               P
             </div>
@@ -45,7 +45,7 @@ export default function Header() {
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               className="hidden md:flex px-5 py-2.5 rounded text-xs uppercase tracking-[0.18em] font-semibold bg-white text-black hover:bg-neutral-200 transition-colors shadow-sm items-center gap-2"
-              href="#reserva"
+              href="/#reserva"
             >
               <span>Pedir Cita</span>
             </motion.a>
@@ -101,7 +101,7 @@ export default function Header() {
                 transition={{ delay: 0.3 }}
                 onClick={() => setIsOpen(false)}
                 className="mt-8 px-8 py-3 rounded-lg text-sm uppercase tracking-[0.18em] font-semibold bg-white text-black text-center w-full shadow-lg"
-                href="#reserva"
+                href="/#reserva"
               >
                 Pedir Cita
               </motion.a>
