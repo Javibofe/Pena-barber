@@ -637,7 +637,7 @@ export default function AdminDashboard() {
     <div className="min-h-screen bg-[#080808] text-white font-sans pb-24">
       {/* HEADER */}
       <header className="sticky top-0 z-50 bg-[#080808]/95 backdrop-blur-xl border-b border-white/5">
-        <div className="max-w-lg mx-auto px-4 py-3 flex items-center justify-between">
+        <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-full border border-white/20 flex items-center justify-center">
               <span className="font-serif text-sm font-bold">P</span>
@@ -662,7 +662,7 @@ export default function AdminDashboard() {
         </div>
 
         {/* TABS */}
-        <div className="max-w-lg mx-auto px-4 flex gap-1 pb-3">
+        <div className="max-w-4xl mx-auto px-4 flex gap-1 pb-3 overflow-x-auto no-scrollbar">
           {(["agenda", "horarios", "resenas"] as const).map((tab) => (
             <button
               key={tab}
@@ -682,7 +682,7 @@ export default function AdminDashboard() {
         </div>
       </header>
 
-      <main className="p-4 max-w-lg mx-auto mt-2 space-y-6">
+      <main className="p-4 max-w-4xl mx-auto mt-2 space-y-6">
         <AnimatePresence mode="wait">
 
           {/* ═══════════════════ TAB: AGENDA ═══════════════════════════════════ */}
@@ -690,7 +690,7 @@ export default function AdminDashboard() {
             <motion.div key="agenda" variants={stagger} initial="hidden" animate="visible" exit={{ opacity: 0, y: -8 }} className="space-y-6">
 
               {/* MÉTRICAS */}
-              <motion.section variants={stagger} className="grid grid-cols-3 gap-3">
+              <motion.section variants={stagger} className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {[
                   { label: "Total", value: totalCitas, color: "text-white", border: "border-white/10" },
                   { label: "Activas", value: citasConfirmadas, color: "text-emerald-400", border: "border-emerald-900/40" },
@@ -985,8 +985,8 @@ export default function AdminDashboard() {
                   </div>
                   <div>
                     <label className="block text-[9px] font-mono uppercase text-neutral-500 mb-1">Cada (min)</label>
-                    <input type="number" min={10} max={59} value={genInterval}
-                      onChange={(e) => setGenInterval(Math.min(59, Math.max(10, Number(e.target.value))))}
+                    <input type="number" value={genInterval}
+                      onChange={(e) => setGenInterval(e.target.value === "" ? "" as any : Number(e.target.value))}
                       className="w-full bg-white/5 border border-white/10 text-white rounded-xl px-3 py-2 text-xs font-mono focus:outline-none focus:border-white/30" />
                   </div>
                 </div>

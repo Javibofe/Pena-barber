@@ -6,14 +6,17 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!;
-const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY!;
+const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "";
+const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY || "";
 
-webPush.setVapidDetails(
-  "mailto:contacto@penabarber.com",
-  vapidPublicKey,
-  vapidPrivateKey
-);
+// Lo configuramos solo si las variables existen (para que el build de Vercel no crashee)
+if (vapidPublicKey && vapidPrivateKey) {
+  webPush.setVapidDetails(
+    "mailto:contacto@penabarber.com",
+    vapidPublicKey,
+    vapidPrivateKey
+  );
+}
 
 export async function POST(request: Request) {
   try {
