@@ -639,9 +639,9 @@ export default function AdminDashboard() {
       <header className="sticky top-0 z-50 bg-[#080808]/95 backdrop-blur-xl border-b border-white/5">
         <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full border border-white/20 flex items-center justify-center">
-              <span className="font-serif text-sm font-bold">P</span>
-            </div>
+            <a href="/" title="Volver a la web pública" className="w-8 h-8 rounded-full border border-white/20 flex items-center justify-center hover:border-white transition-colors group">
+              <span className="font-serif text-sm font-bold text-neutral-300 group-hover:text-white transition-colors">P</span>
+            </a>
             <div>
               <h1 className="font-serif text-base tracking-wide leading-none">Panel de Control</h1>
               <p className="text-[9px] uppercase tracking-widest text-neutral-500 font-mono mt-0.5">Peña Barber</p>
@@ -655,7 +655,10 @@ export default function AdminDashboard() {
               className="bg-white/5 border border-white/10 text-neutral-300 rounded-lg px-3 py-1.5 text-xs font-mono focus:outline-none focus:border-white/30 transition-colors cursor-pointer"
               style={{ colorScheme: "dark" }}
             />
-            <button onClick={handleLogout} className="text-[10px] font-mono text-neutral-500 hover:text-white uppercase">
+            <a href="/" className="text-[10px] font-mono text-neutral-400 hover:text-white uppercase border border-white/10 hover:border-white/30 px-2 py-1.5 rounded transition-colors mr-1">
+              Ver Web
+            </a>
+            <button onClick={handleLogout} className="text-[10px] font-mono text-red-500 hover:text-red-400 uppercase ml-2">
               Salir
             </button>
           </div>
