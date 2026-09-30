@@ -31,24 +31,13 @@ export default function PushManager({ phoneNumber, onSubscribeStatus }: PushMana
   const [errorMsg, setErrorMsg] = useState("");
 
   useEffect(() => {
-    // Comprobar soporte de service workers y notificaciones
+    // Solo comprobamos soporte, no ocultamos el botón automáticamente
     if ("serviceWorker" in navigator && "PushManager" in window) {
       setIsSupported(true);
-      checkSubscription();
+      // Opcional: registrar el SW preventivamente
+      navigator.serviceWorker.register("/sw.js").catch(console.error);
     }
   }, []);
-
-  const checkSubscription = async () => {
-    try {
-      const registration = await navigator.serviceWorker.register("/sw.js");
-      const subscription = await registration.pushManager.getSubscription();
-      const hasSub = !!subscription;
-      setIsSubscribed(hasSub);
-      if (onSubscribeStatus) onSubscribeStatus(hasSub);
-    } catch (err) {
-      console.error("Error al comprobar SW:", err);
-    }
-  };
 
   const subscribeToPush = async () => {
     if (!phoneNumber) {
