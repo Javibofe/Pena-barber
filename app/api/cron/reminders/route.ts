@@ -62,7 +62,11 @@ export async function GET(request: Request) {
         .eq("phone_number", client.phone);
 
       if (subs && subs.length > 0) {
-        const timeFormatted = new Date(appt.appointment_date).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+        const timeFormatted = new Date(appt.appointment_date).toLocaleTimeString("es-ES", { 
+          hour: "2-digit", 
+          minute: "2-digit",
+          timeZone: "Europe/Madrid"
+        });
         
         const payload = JSON.stringify({
           title: "¡Tu cita es en 1 hora!",

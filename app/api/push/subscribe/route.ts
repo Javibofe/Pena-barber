@@ -16,7 +16,22 @@ export async function POST(request: Request) {
       );
     }
 
-    // Guardar la suscripción en Supabase
+    // 1. Evitar duplicados: Borrar suscripciones antiguas de ESTE teléfono que tengan el mismo endpoint
+    // (Opcional, pero para evitar spam al mismo dispositivo borramos y volvemos a insertar)
+    const { data: existingSubs } = await supabase
+      .from("push_subscriptions")
+      .select("id, subscription")
+      .eq("phone_number", phone_number);
+
+    if (existingSubs) {
+      for (const row of existingSubs) {
+        if (row.subscription && row.subscription.endpoint === subscription.endpoint) {
+          await supabase.from("push_subscriptions").delete().eq("id", row.id);
+        }
+      }
+    }
+
+    // 2. Guardar la nueva suscripción
     const { data, error } = await supabase
       .from("push_subscriptions")
       .insert([{ phone_number, subscription }]);
