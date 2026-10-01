@@ -34,11 +34,11 @@ export default function Footer() {
             </li>
             <li className="flex flex-col">
               <span className="text-white font-medium mb-1">Miércoles</span>
-              <span className="font-mono text-neutral-300">15:00 – 21:00</span>
+              <span className="font-mono text-neutral-300">15:00 – 20:00</span>
             </li>
             <li className="flex flex-col">
               <span className="text-white font-medium mb-1">Jueves y Viernes</span>
-              <span className="font-mono text-neutral-300">09:00 – 13:30 &nbsp;|&nbsp; 15:00 – 21:00</span>
+              <span className="font-mono text-neutral-300">09:00 – 13:30 &nbsp;|&nbsp; 15:00 – 20:00</span>
             </li>
             <li className="flex flex-col pt-1">
               <span className="text-neutral-500 font-medium mb-1">Sábados y Domingos</span>
