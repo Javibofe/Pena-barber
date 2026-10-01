@@ -77,7 +77,7 @@ export default function AdminDashboard() {
   const [password, setPassword] = useState("");
   const [loginError, setLoginError] = useState("");
 
-  const [activeTab, setActiveTab] = useState<"agenda" | "horarios" | "resenas">("agenda");
+  const [activeTab, setActiveTab] = useState<"reservadas" | "disponibles" | "generar" | "resenas">("reservadas");
   const [selectedDate, setSelectedDate] = useState(getLocalToday());
 
   // Data
@@ -127,7 +127,6 @@ export default function AdminDashboard() {
   const [isSlotSelectMode, setIsSlotSelectMode] = useState(false);
   const [selectedSlotIds, setSelectedSlotIds] = useState<string[]>([]);
 
-  // Custom Modal State
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
     title: string;
@@ -146,6 +145,72 @@ export default function AdminDashboard() {
 
   const closeConfirm = () => {
     setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+  };
+
+  // Assign slot state
+  const [assignModal, setAssignModal] = useState<{
+    isOpen: boolean;
+    slotTime: string;
+    clientName: string;
+    clientPhone: string;
+    loading: boolean;
+    error: string;
+  }>({
+    isOpen: false,
+    slotTime: "",
+    clientName: "",
+    clientPhone: "",
+    loading: false,
+    error: "",
+  });
+
+  const handleAssignSlot = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAssignModal(prev => ({ ...prev, loading: true, error: "" }));
+
+    const appointmentDate = new Date(`${selectedDate}T${assignModal.slotTime}:00`).toISOString();
+
+    try {
+      // Create or find client
+      const { data: client, error: clientError } = await supabase
+        .from("clients")
+        .upsert(
+          { phone: assignModal.clientPhone, full_name: assignModal.clientName },
+          { onConflict: "phone" }
+        )
+        .select()
+        .single();
+
+      if (clientError || !client) throw new Error("Error al guardar cliente");
+
+      // Check if slot is already booked
+      const { data: existingAppts } = await supabase
+        .from("appointments")
+        .select("id")
+        .eq("appointment_date", appointmentDate)
+        .neq("status", "cancelled");
+
+      if (existingAppts && existingAppts.length > 0) {
+        throw new Error("Este turno ya está ocupado");
+      }
+
+      // Create appointment
+      const { error: apptError } = await supabase
+        .from("appointments")
+        .insert({
+          client_id: client.id,
+          appointment_date: appointmentDate,
+          status: "confirmed"
+        });
+
+      if (apptError) throw apptError;
+
+      // Success
+      setAssignModal(prev => ({ ...prev, isOpen: false, clientName: "", clientPhone: "", loading: false }));
+      fetchAppointments(selectedDate);
+    } catch (error: any) {
+      setAssignModal(prev => ({ ...prev, loading: false, error: error.message }));
+    }
   };
 
   // ─── Fetch ─────────────────────────────────────────────────────────────────
@@ -637,28 +702,35 @@ export default function AdminDashboard() {
     <div className="min-h-screen bg-[#080808] text-white font-sans pb-24">
       {/* HEADER */}
       <header className="sticky top-0 z-50 bg-[#080808]/95 backdrop-blur-xl border-b border-white/5">
-        <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <a href="/" title="Volver a la web pública" className="w-8 h-8 rounded-full border border-white/20 flex items-center justify-center hover:border-white transition-colors group">
-              <span className="font-serif text-sm font-bold text-neutral-300 group-hover:text-white transition-colors">P</span>
-            </a>
-            <div>
-              <h1 className="font-serif text-base tracking-wide leading-none">Panel de Control</h1>
-              <p className="text-[9px] uppercase tracking-widest text-neutral-500 font-mono mt-0.5">Peña Barber</p>
+        <div className="max-w-4xl mx-auto px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-0">
+          <div className="flex items-center justify-between w-full sm:w-auto">
+            <div className="flex items-center gap-3">
+              <a href="/" title="Volver a la web pública" className="w-8 h-8 rounded-full border border-white/20 flex items-center justify-center hover:border-white transition-colors group shrink-0">
+                <span className="font-serif text-sm font-bold text-neutral-300 group-hover:text-white transition-colors">P</span>
+              </a>
+              <div>
+                <h1 className="font-serif text-base tracking-wide leading-none">Panel de Control</h1>
+                <p className="text-[9px] uppercase tracking-widest text-neutral-500 font-mono mt-0.5">Peña Barber</p>
+              </div>
             </div>
+            
+            <button onClick={handleLogout} className="sm:hidden text-[10px] font-mono text-red-500/80 hover:text-red-400 border border-red-900/30 px-2 py-1 rounded">
+              Salir
+            </button>
           </div>
-          <div className="flex items-center gap-3">
+          
+          <div className="flex items-center gap-2 w-full sm:w-auto">
             <input
               type="date"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
-              className="bg-white/5 border border-white/10 text-neutral-300 rounded-lg px-3 py-1.5 text-xs font-mono focus:outline-none focus:border-white/30 transition-colors cursor-pointer"
+              className="flex-1 sm:flex-none bg-white/5 border border-white/10 text-neutral-300 rounded-lg px-3 py-1.5 text-xs font-mono focus:outline-none focus:border-white/30 transition-colors cursor-pointer"
               style={{ colorScheme: "dark" }}
             />
-            <a href="/" className="text-[10px] font-mono text-neutral-400 hover:text-white uppercase border border-white/10 hover:border-white/30 px-2 py-1.5 rounded transition-colors mr-1">
+            <a href="/" className="hidden sm:block text-[10px] font-mono text-neutral-400 hover:text-white uppercase border border-white/10 hover:border-white/30 px-2 py-1.5 rounded transition-colors shrink-0">
               Ver Web
             </a>
-            <button onClick={handleLogout} className="text-[10px] font-mono text-red-500 hover:text-red-400 uppercase ml-2">
+            <button onClick={handleLogout} className="hidden sm:block text-[10px] font-mono text-red-500 hover:text-red-400 uppercase ml-1 shrink-0">
               Salir
             </button>
           </div>
@@ -666,11 +738,11 @@ export default function AdminDashboard() {
 
         {/* TABS */}
         <div className="max-w-4xl mx-auto px-4 flex gap-1 pb-3 overflow-x-auto no-scrollbar">
-          {(["agenda", "horarios", "resenas"] as const).map((tab) => (
+          {(["reservadas", "disponibles", "generar", "resenas"] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`relative px-4 py-1.5 rounded-lg text-xs font-mono uppercase tracking-widest transition-all ${
+              className={`relative px-4 py-1.5 rounded-lg text-xs font-mono uppercase tracking-widest transition-all whitespace-nowrap shrink-0 ${
                 activeTab === tab ? "text-white" : "text-neutral-500 hover:text-neutral-300"
               }`}
             >
@@ -678,7 +750,7 @@ export default function AdminDashboard() {
                 <motion.div layoutId="tab-bg" className="absolute inset-0 bg-white/10 rounded-lg" transition={{ type: "spring", bounce: 0.2, duration: 0.4 }} />
               )}
               <span className="relative z-10">
-                {tab === "agenda" ? "📋 Agenda" : tab === "horarios" ? "🗓 Horarios" : "⭐ Reseñas"}
+                {tab === "reservadas" ? "📋 Reservadas" : tab === "disponibles" ? "✅ Libres" : tab === "generar" ? "⚙️ Generar" : "⭐ Reseñas"}
               </span>
             </button>
           ))}
@@ -688,109 +760,79 @@ export default function AdminDashboard() {
       <main className="p-4 max-w-4xl mx-auto mt-2 space-y-6">
         <AnimatePresence mode="wait">
 
-          {/* ═══════════════════ TAB: AGENDA ═══════════════════════════════════ */}
-          {activeTab === "agenda" && (
-            <motion.div key="agenda" variants={stagger} initial="hidden" animate="visible" exit={{ opacity: 0, y: -8 }} className="space-y-6">
+          {/* ═══════════════════ TAB: RESERVADAS ═══════════════════════════════════ */}
+          {activeTab === "reservadas" && (() => {
+            const reservadasEntries = agendaEntries.filter(e => e.kind === "appt");
+            return (
+              <motion.div key="reservadas" variants={stagger} initial="hidden" animate="visible" exit={{ opacity: 0, y: -8 }} className="space-y-6">
 
-              {/* MÉTRICAS */}
-              <motion.section variants={stagger} className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {[
-                  { label: "Total", value: totalCitas, color: "text-white", border: "border-white/10" },
-                  { label: "Activas", value: citasConfirmadas, color: "text-emerald-400", border: "border-emerald-900/40" },
-                  { label: "Faltas", value: faltas, color: "text-red-400", border: "border-red-900/40" },
-                ].map((m) => (
-                  <motion.div key={m.label} variants={fadeUp} className={`bg-white/[0.03] border ${m.border} rounded-2xl p-4 flex flex-col items-center justify-center text-center`}>
-                    <span className="text-[9px] text-neutral-500 uppercase tracking-widest font-mono mb-1">{m.label}</span>
-                    <span className={`text-3xl font-serif ${m.color}`}>{m.value}</span>
-                  </motion.div>
-                ))}
-              </motion.section>
+                {/* MÉTRICAS */}
+                <motion.section variants={stagger} className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {[
+                    { label: "Total", value: totalCitas, color: "text-white", border: "border-white/10" },
+                    { label: "Activas", value: citasConfirmadas, color: "text-emerald-400", border: "border-emerald-900/40" },
+                    { label: "Faltas", value: faltas, color: "text-red-400", border: "border-red-900/40" },
+                  ].map((m) => (
+                    <motion.div key={m.label} variants={fadeUp} className={`bg-white/[0.03] border ${m.border} rounded-2xl p-4 flex flex-col items-center justify-center text-center`}>
+                      <span className="text-[9px] text-neutral-500 uppercase tracking-widest font-mono mb-1">{m.label}</span>
+                      <span className={`text-3xl font-serif ${m.color}`}>{m.value}</span>
+                    </motion.div>
+                  ))}
+                </motion.section>
 
-              {/* AGENDA UNIFICADA */}
-              <motion.section variants={fadeUp}>
-                <div className="flex items-center justify-between mb-3">
-                  <h2 className="text-[10px] uppercase tracking-[0.25em] font-mono text-neutral-400">Jornada Completa</h2>
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={() => setShowRecurring(true)}
-                      className="text-[10px] uppercase tracking-widest font-mono text-neutral-400 bg-white/5 hover:bg-white/10 hover:text-white px-3 py-1.5 rounded transition-all border border-white/5 flex items-center gap-1.5"
-                    >
-                      <span>🔄</span> <span className="hidden sm:inline">Cita Recurrente</span>
-                    </button>
-                    {(isLoading || slotsLoading) && <div className="w-3 h-3 rounded-full border border-white/20 border-t-white animate-spin" />}
-                  </div>
-                </div>
-
-                {/* BOTONERA SELECCIÓN MÚLTIPLE */}
-                {agendaEntries.some(e => e.kind === "appt") && (
-                  <div className="flex items-center justify-between mb-4 bg-white/[0.02] border border-white/5 rounded-lg px-3 py-2">
+                <motion.section variants={fadeUp}>
+                  <div className="flex items-center justify-between mb-3">
+                    <h2 className="text-[10px] uppercase tracking-[0.25em] font-mono text-neutral-400">Citas Reservadas</h2>
                     <div className="flex items-center gap-3">
-                      <button
-                        onClick={() => {
-                          setIsSelectMode(!isSelectMode);
-                          if (isSelectMode) setSelectedApptIds([]); // clear selection if exiting
-                        }}
-                        className={`text-[9px] uppercase font-mono tracking-widest transition-colors ${isSelectMode ? "text-white font-bold" : "text-neutral-500 hover:text-neutral-300"}`}
-                      >
-                        {isSelectMode ? "Cancelar Selección" : "✓ Seleccionar Citas"}
-                      </button>
-                      {isSelectMode && (
+                      {(isLoading || slotsLoading) && <div className="w-3 h-3 rounded-full border border-white/20 border-t-white animate-spin" />}
+                    </div>
+                  </div>
+
+                  {/* BOTONERA SELECCIÓN MÚLTIPLE */}
+                  {reservadasEntries.length > 0 && (
+                    <div className="flex items-center justify-between mb-4 bg-white/[0.02] border border-white/5 rounded-lg px-3 py-2">
+                      <div className="flex items-center gap-3">
                         <button
-                          onClick={handleSelectAllAppts}
-                          className="text-[9px] uppercase font-mono tracking-widest text-neutral-400 hover:text-white transition-colors"
+                          onClick={() => {
+                            setIsSelectMode(!isSelectMode);
+                            if (isSelectMode) setSelectedApptIds([]);
+                          }}
+                          className={`text-[9px] uppercase font-mono tracking-widest transition-colors ${isSelectMode ? "text-white font-bold" : "text-neutral-500 hover:text-neutral-300"}`}
                         >
-                          {selectedApptIds.length === appointments.length ? "Deseleccionar todo" : "Seleccionar Todo"}
+                          {isSelectMode ? "Cancelar Selección" : "✓ Seleccionar Citas"}
+                        </button>
+                        {isSelectMode && (
+                          <button
+                            onClick={handleSelectAllAppts}
+                            className="text-[9px] uppercase font-mono tracking-widest text-neutral-400 hover:text-white transition-colors"
+                          >
+                            {selectedApptIds.length === appointments.length ? "Deseleccionar todo" : "Seleccionar Todo"}
+                          </button>
+                        )}
+                      </div>
+                      {isSelectMode && selectedApptIds.length > 0 && (
+                        <button
+                          onClick={handleBulkDeleteAppts}
+                          className="text-[9px] uppercase font-mono tracking-widest bg-red-950/40 text-red-400 hover:text-red-300 hover:bg-red-900/40 border border-red-900/40 px-2 py-1 rounded transition-colors"
+                        >
+                          🗑 Borrar ({selectedApptIds.length})
                         </button>
                       )}
                     </div>
-                    {isSelectMode && selectedApptIds.length > 0 && (
-                      <button
-                        onClick={handleBulkDeleteAppts}
-                        className="text-[9px] uppercase font-mono tracking-widest bg-red-950/40 text-red-400 hover:text-red-300 hover:bg-red-900/40 border border-red-900/40 px-2 py-1 rounded transition-colors"
-                      >
-                        🗑 Borrar ({selectedApptIds.length})
-                      </button>
-                    )}
-                  </div>
-                )}
+                  )}
 
-                {errorMsg ? (
-                  <div className="p-4 rounded-xl bg-red-950/30 border border-red-900/30 text-xs text-red-300 text-center font-mono">{errorMsg}</div>
-                ) : agendaEntries.length === 0 && !isLoading && !slotsLoading ? (
-                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center py-12 text-neutral-600 bg-white/[0.02] border border-white/5 rounded-2xl">
-                    <span className="text-4xl mb-3">📭</span>
-                    <span className="text-sm font-light">Sin actividad para este día</span>
-                    <span className="text-xs text-neutral-700 mt-1 font-mono">Crea turnos en la pestaña Horarios</span>
-                  </motion.div>
-                ) : (
-                  <div className="space-y-2">
-                    <AnimatePresence>
-                      {agendaEntries.map((entry, i) => {
-                        // ── Slot libre ──────────────────────────────────────
-                        if (entry.kind === "slot") {
-                          return (
-                            <motion.div
-                              key={`slot-${entry.slot.id}`}
-                              layout
-                              initial={{ opacity: 0, y: 8 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              exit={{ opacity: 0, scale: 0.95 }}
-                              transition={{ delay: i * 0.03 }}
-                              className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-white/5 border-dashed bg-white/[0.02] opacity-75 hover:opacity-100 transition-opacity"
-                            >
-                              <div className="flex items-center gap-3">
-                                <span className="font-mono text-sm font-bold text-neutral-600 w-12 shrink-0">{entry.time}</span>
-                                <span className="flex-1 text-[10px] text-neutral-700 uppercase tracking-widest font-mono">Libre</span>
-                              </div>
-                              <button
-                                onClick={() => handleBlockSlot(entry.time)}
-                                className="text-[9px] font-mono uppercase text-neutral-500 hover:text-white border border-white/10 hover:border-white/30 px-2 py-1 rounded-lg transition-colors"
-                              >
-                                🔒 Bloquear
-                              </button>
-                            </motion.div>
-                          );
-                        }
+                  {errorMsg ? (
+                    <div className="p-4 rounded-xl bg-red-950/30 border border-red-900/30 text-xs text-red-300 text-center font-mono">{errorMsg}</div>
+                  ) : reservadasEntries.length === 0 && !isLoading ? (
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center py-12 text-neutral-600 bg-white/[0.02] border border-white/5 rounded-2xl">
+                      <span className="text-4xl mb-3">📭</span>
+                      <span className="text-sm font-light">No hay citas reservadas hoy</span>
+                    </motion.div>
+                  ) : (
+                    <div className="space-y-2">
+                      <AnimatePresence>
+                        {reservadasEntries.map((entry, i) => {
+                          if (entry.kind !== "appt") return null;
 
                         // ── Cita ────────────────────────────────────────────
                         const appt = entry.appt;
@@ -864,40 +906,51 @@ export default function AdminDashboard() {
 
                                 {/* ACCIONES */}
                                 {!isSelectMode && (
-                                  <div className="flex items-center gap-2 ml-3 shrink-0">
+                                  <div className="flex flex-col sm:flex-row items-center gap-2 ml-2 shrink-0">
                                     {isNoShow ? (
                                       /* Deshacer falta */
-                                      <>
+                                      <div className="flex flex-row sm:flex-row gap-2">
                                         <motion.button
                                           whileTap={{ scale: 0.9 }}
                                           onClick={(e) => { e.stopPropagation(); handleUndoNoShow(appt.id); }}
-                                          className="flex flex-col items-center px-2.5 py-2 rounded-xl bg-emerald-950/30 text-emerald-400 hover:bg-emerald-900/40 border border-emerald-900/30 transition-all text-center"
+                                          className="flex flex-col items-center px-2 py-2 rounded-xl bg-emerald-950/30 text-emerald-400 hover:bg-emerald-900/40 border border-emerald-900/30 transition-all text-center min-w-[50px]"
                                           title="Deshacer falta"
                                         >
                                           <span className="text-base">↩️</span>
-                                          <span className="text-[8px] uppercase tracking-wider font-mono mt-0.5">Deshacer</span>
+                                          <span className="text-[7px] uppercase tracking-wider font-mono mt-0.5">Deshacer</span>
                                         </motion.button>
                                         <motion.button
                                           whileTap={{ scale: 0.9 }}
                                           onClick={(e) => { e.stopPropagation(); handleDeleteAppointment(appt); }}
-                                          className="flex flex-col items-center px-2.5 py-2 rounded-xl bg-red-950/20 text-red-500/60 hover:text-red-400 border border-red-900/20 hover:border-red-900/40 transition-all"
+                                          className="flex flex-col items-center px-2 py-2 rounded-xl bg-red-950/20 text-red-500/60 hover:text-red-400 border border-red-900/20 hover:border-red-900/40 transition-all min-w-[50px]"
                                           title="Eliminar cita"
                                         >
                                           <span className="text-base">🗑</span>
-                                          <span className="text-[8px] uppercase tracking-wider font-mono mt-0.5">Borrar</span>
+                                          <span className="text-[7px] uppercase tracking-wider font-mono mt-0.5">Borrar</span>
                                         </motion.button>
-                                      </>
+                                      </div>
                                     ) : (
-                                      /* Marcar falta */
-                                      <motion.button
-                                        whileTap={{ scale: 0.9 }}
-                                        onClick={(e) => { e.stopPropagation(); handleMarkNoShow(appt.id); }}
-                                        className="flex flex-col items-center justify-center px-3 py-2.5 rounded-xl bg-red-950/30 text-red-400 hover:bg-red-900/40 border border-red-900/30 transition-all"
-                                        title="Marcar como falta"
-                                      >
-                                        <span className="text-lg">👤</span>
-                                        <span className="text-[8px] uppercase tracking-wider font-mono mt-1">Falta</span>
-                                      </motion.button>
+                                      /* Acciones para cita normal */
+                                      <div className="flex flex-row sm:flex-row gap-2">
+                                        <motion.button
+                                          whileTap={{ scale: 0.9 }}
+                                          onClick={(e) => { e.stopPropagation(); handleDeleteAppointment(appt); }}
+                                          className="flex flex-col items-center justify-center px-2 py-2 rounded-xl bg-red-950/20 text-red-500/60 hover:text-red-400 border border-red-900/20 hover:border-red-900/40 transition-all min-w-[50px]"
+                                          title="Cancelar cita (quedará libre)"
+                                        >
+                                          <span className="text-base">🗑</span>
+                                          <span className="text-[7px] uppercase tracking-wider font-mono mt-0.5">Anular</span>
+                                        </motion.button>
+                                        <motion.button
+                                          whileTap={{ scale: 0.9 }}
+                                          onClick={(e) => { e.stopPropagation(); handleMarkNoShow(appt.id); }}
+                                          className="flex flex-col items-center justify-center px-2 py-2 rounded-xl bg-red-950/30 text-red-400 hover:bg-red-900/40 border border-red-900/30 transition-all min-w-[50px]"
+                                          title="Marcar como falta"
+                                        >
+                                          <span className="text-lg">👤</span>
+                                          <span className="text-[7px] uppercase tracking-wider font-mono mt-0.5">Falta</span>
+                                        </motion.button>
+                                      </div>
                                     )}
                                   </div>
                                 )}
@@ -907,14 +960,83 @@ export default function AdminDashboard() {
                         );
                       })}
                     </AnimatePresence>
-                  </div>
-                )}
-              </motion.section>
-            </motion.div>
-          )}
+                    </div>
+                  )}
+                </motion.section>
+              </motion.div>
+            );
+          })()}
 
-          {/* ═══════════════════ TAB: HORARIOS ═════════════════════════════════ */}
-          {activeTab === "horarios" && (
+          {/* ═══════════════════ TAB: DISPONIBLES ═══════════════════════════════════ */}
+          {activeTab === "disponibles" && (() => {
+            const disponiblesEntries = agendaEntries.filter(e => e.kind === "slot");
+            return (
+              <motion.div key="disponibles" variants={stagger} initial="hidden" animate="visible" exit={{ opacity: 0, y: -8 }} className="space-y-6">
+                <motion.section variants={fadeUp}>
+                  <div className="flex items-center justify-between mb-3">
+                    <h2 className="text-[10px] uppercase tracking-[0.25em] font-mono text-neutral-400">Huecos Libres</h2>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => setShowRecurring(true)}
+                        className="text-[10px] uppercase tracking-widest font-mono text-neutral-400 bg-white/5 hover:bg-white/10 hover:text-white px-3 py-1.5 rounded transition-all border border-white/5 flex items-center gap-1.5"
+                      >
+                        <span>🔄</span> <span className="hidden sm:inline">Cita Recurrente</span>
+                      </button>
+                      {(slotsLoading) && <div className="w-3 h-3 rounded-full border border-white/20 border-t-white animate-spin" />}
+                    </div>
+                  </div>
+
+                  {disponiblesEntries.length === 0 && !slotsLoading ? (
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center py-12 text-neutral-600 bg-white/[0.02] border border-white/5 rounded-2xl">
+                      <span className="text-4xl mb-3">🕰</span>
+                      <span className="text-sm font-light">No hay huecos libres para hoy</span>
+                    </motion.div>
+                  ) : (
+                    <div className="space-y-2">
+                      <AnimatePresence>
+                        {disponiblesEntries.map((entry, i) => {
+                          if (entry.kind !== "slot") return null;
+                          return (
+                            <motion.div
+                              key={`slot-${entry.slot.id}`}
+                              layout
+                              initial={{ opacity: 0, y: 8 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, scale: 0.95 }}
+                              transition={{ delay: i * 0.03 }}
+                              className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-white/5 border-dashed bg-white/[0.02] opacity-75 hover:opacity-100 transition-opacity"
+                            >
+                              <div className="flex items-center gap-3">
+                                <span className="font-mono text-sm font-bold text-neutral-600 w-12 shrink-0">{entry.time}</span>
+                                <span className="flex-1 text-[10px] text-emerald-500/70 uppercase tracking-widest font-mono">Libre</span>
+                              </div>
+                              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1 sm:gap-2">
+                                <button
+                                  onClick={() => setAssignModal(prev => ({ ...prev, isOpen: true, slotTime: entry.time, error: "", clientName: "", clientPhone: "" }))}
+                                  className="text-[9px] font-mono uppercase bg-emerald-950/40 text-emerald-400 hover:text-emerald-300 border border-emerald-900/40 hover:border-emerald-500/50 px-2 py-1.5 rounded-lg transition-colors font-bold text-center"
+                                >
+                                  ✅ Asignar
+                                </button>
+                                <button
+                                  onClick={() => handleBlockSlot(entry.time)}
+                                  className="text-[9px] font-mono uppercase text-neutral-500 hover:text-white border border-white/10 hover:border-white/30 px-2 py-1.5 rounded-lg transition-colors text-center"
+                                >
+                                  🔒 Bloquear
+                                </button>
+                              </div>
+                            </motion.div>
+                          );
+                        })}
+                      </AnimatePresence>
+                    </div>
+                  )}
+                </motion.section>
+              </motion.div>
+            );
+          })()}
+
+          {/* ═══════════════════ TAB: GENERAR ═════════════════════════════════ */}
+          {activeTab === "generar" && (
             <motion.div key="horarios" variants={stagger} initial="hidden" animate="visible" exit={{ opacity: 0, y: -8 }} className="space-y-6">
 
               {/* GENERADOR */}
@@ -1112,7 +1234,7 @@ export default function AdminDashboard() {
 
                             {!isEditing && (
                               apptOnSlot
-                                ? <span className="flex-1 text-xs text-emerald-400 font-mono truncate">✓ {apptOnSlot.clients?.full_name || "Ocupado"}</span>
+                                ? <span className="flex-1 text-[10px] text-emerald-500/70 font-mono uppercase tracking-widest">Reservado</span>
                                 : <span className="flex-1 text-[10px] text-neutral-600 font-mono uppercase tracking-widest">Libre</span>
                             )}
                             {isEditing && (
@@ -1312,6 +1434,51 @@ export default function AdminDashboard() {
                   <button type="button" onClick={() => setShowRecurring(false)} disabled={recLoading} className="flex-1 py-2.5 rounded-lg border border-white/10 text-white text-[10px] uppercase font-mono tracking-widest hover:bg-white/5 transition-colors disabled:opacity-50">Cancelar</button>
                   <button type="submit" disabled={recLoading} className="flex-1 py-2.5 rounded-lg bg-white hover:bg-neutral-200 text-black text-[10px] uppercase font-mono tracking-widest transition-colors font-bold disabled:opacity-50 flex justify-center">
                     {recLoading ? <div className="w-4 h-4 rounded-full border-2 border-black/20 border-t-black animate-spin"/> : "Generar Citas"}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+      {/* ── MODAL ASIGNAR CITA ── */}
+      <AnimatePresence>
+        {assignModal.isOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              onClick={() => !assignModal.loading && setAssignModal(prev => ({ ...prev, isOpen: false }))}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="relative w-full max-w-sm bg-[#111] border border-white/10 p-6 rounded-2xl shadow-2xl flex flex-col"
+            >
+              <h3 className="font-serif text-lg text-white mb-1">Asignar Turno - {assignModal.slotTime}</h3>
+              <p className="text-xs text-neutral-400 font-light mb-6">Asigna este hueco a un cliente manualmente.</p>
+              
+              <form onSubmit={handleAssignSlot} className="space-y-4">
+                <div>
+                  <label className="block text-[10px] uppercase font-mono text-neutral-500 mb-1">Nombre del Cliente</label>
+                  <input type="text" required value={assignModal.clientName} onChange={e => setAssignModal(prev => ({ ...prev, clientName: e.target.value }))} className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-xs text-white" placeholder="Ej. Javier"/>
+                </div>
+                <div>
+                  <label className="block text-[10px] uppercase font-mono text-neutral-500 mb-1">Teléfono</label>
+                  <input type="tel" required value={assignModal.clientPhone} onChange={e => setAssignModal(prev => ({ ...prev, clientPhone: e.target.value }))} className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-xs text-white" placeholder="Ej. 600123456"/>
+                </div>
+
+                {assignModal.error && (
+                  <p className="text-xs text-red-400 font-mono mt-2">{assignModal.error}</p>
+                )}
+
+                <div className="flex items-center gap-3 mt-6 pt-2">
+                  <button type="button" onClick={() => setAssignModal(prev => ({ ...prev, isOpen: false }))} disabled={assignModal.loading} className="flex-1 py-2.5 rounded-lg border border-white/10 text-white text-[10px] uppercase font-mono tracking-widest hover:bg-white/5 transition-colors disabled:opacity-50">Cancelar</button>
+                  <button type="submit" disabled={assignModal.loading} className="flex-1 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] uppercase font-mono tracking-widest transition-colors font-bold disabled:opacity-50 flex justify-center">
+                    {assignModal.loading ? <div className="w-4 h-4 rounded-full border-2 border-white/20 border-t-white animate-spin"/> : "Asignar"}
                   </button>
                 </div>
               </form>

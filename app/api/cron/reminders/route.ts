@@ -24,7 +24,7 @@ export async function GET(request: Request) {
     // 1. Verificar seguridad del CRON
     const authHeader = request.headers.get("authorization");
     const cronSecret = process.env.CRON_SECRET;
-    
+
     // Si tenemos configurada una contraseña en Vercel, la exigimos
     if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
@@ -62,15 +62,15 @@ export async function GET(request: Request) {
         .eq("phone_number", client.phone);
 
       if (subs && subs.length > 0) {
-        const timeFormatted = new Date(appt.appointment_date).toLocaleTimeString("es-ES", { 
-          hour: "2-digit", 
+        const timeFormatted = new Date(appt.appointment_date).toLocaleTimeString("es-ES", {
+          hour: "2-digit",
           minute: "2-digit",
           timeZone: "Europe/Madrid"
         });
-        
+
         const payload = JSON.stringify({
-          title: "¡Tu cita es en 1 hora!",
-          body: `Hola ${client.full_name}, te recordamos tu reserva hoy a las ${timeFormatted}.`,
+          title: "¡Vete preparando!",
+          body: `Hola ${client.full_name}, te recordamos tu cita hoy a las ${timeFormatted}.`,
           url: "/"
         });
 
@@ -91,9 +91,9 @@ export async function GET(request: Request) {
         .eq("id", appt.id);
     }
 
-    return NextResponse.json({ 
-      success: true, 
-      message: `Proceso finalizado. Avisos enviados: ${remindersSent}` 
+    return NextResponse.json({
+      success: true,
+      message: `Proceso finalizado. Avisos enviados: ${remindersSent}`
     });
 
   } catch (error: any) {
