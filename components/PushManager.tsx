@@ -55,13 +55,23 @@ export default function PushManager({ phoneNumber, onSubscribeStatus }: PushMana
         throw new Error("Permiso de notificación denegado.");
       }
 
-      // Registrar/obtener Service Worker
+      // Asegurar que el Service Worker esté activo
       const registration = await navigator.serviceWorker.ready;
 
       // Obtener la clave pública desde variables de entorno de Next
       const publicVapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
       if (!publicVapidKey) {
         throw new Error("Clave VAPID no configurada en el cliente.");
+      }
+
+      // Limpiar suscripción previa si existía (evita error 'push service error' por token desfasado o corrupto en Google FCM)
+      try {
+        const existingSub = await registration.pushManager.getSubscription();
+        if (existingSub) {
+          await existingSub.unsubscribe();
+        }
+      } catch (cleanErr) {
+        console.warn("Aviso al comprobar suscripción previa:", cleanErr);
       }
 
       // Crear la suscripción
@@ -89,7 +99,14 @@ export default function PushManager({ phoneNumber, onSubscribeStatus }: PushMana
       if (onSubscribeStatus) onSubscribeStatus(true);
     } catch (err: any) {
       console.error("Error suscribiéndose:", err);
-      setErrorMsg(err.message || "No se pudo activar las notificaciones.");
+      const msg = err?.message || "";
+      if (msg.includes("push service error") || msg.includes("Registration failed")) {
+        setErrorMsg("Tu móvil no pudo conectar con el servicio de avisos de Google. Comprueba si tienes un bloqueador de publicidad (DNS Privado), ahorro de batería extremo o ábrelo directamente en Google Chrome.");
+      } else if (msg.toLowerCase().includes("denied") || msg.toLowerCase().includes("denegado")) {
+        setErrorMsg("Permiso de notificaciones denegado en tu navegador.");
+      } else {
+        setErrorMsg(msg || "No se pudo activar las notificaciones.");
+      }
     } finally {
       setLoading(false);
     }
