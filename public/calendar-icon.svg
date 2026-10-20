@@ -1,0 +1,34 @@
+<svg viewBox="0 0 234 235" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+  <mask id="cal-mask">
+    <rect width="234" height="235" fill="white" />
+    <!-- Loop 1 slot cutout -->
+    <rect x="71" y="38" width="25" height="35" rx="12.5" fill="black" />
+    <!-- Loop 2 slot cutout -->
+    <rect x="131" y="38" width="25" height="35" rx="12.5" fill="black" />
+    <!-- Inner main window cutout -->
+    <rect x="46" y="90" width="138" height="104" rx="4" fill="black" />
+  </mask>
+
+  <!-- Calendar card body with mask -->
+  <rect x="31" y="41" width="168" height="166" rx="28" mask="url(#cal-mask)" />
+
+  <!-- Loop 1 -->
+  <rect x="76" y="26" width="15" height="41" rx="7.5" />
+  <!-- Loop 2 -->
+  <rect x="136" y="26" width="15" height="41" rx="7.5" />
+
+  <!-- Grid squares -->
+  <!-- Row 1 -->
+  <rect x="89" y="103" width="21" height="18" rx="2" />
+  <rect x="120" y="103" width="21" height="18" rx="2" />
+  <rect x="152" y="103" width="21" height="18" rx="2" />
+  <!-- Row 2 -->
+  <rect x="57" y="133" width="21" height="18" rx="2" />
+  <rect x="89" y="133" width="21" height="18" rx="2" />
+  <rect x="120" y="133" width="21" height="18" rx="2" />
+  <rect x="152" y="133" width="21" height="18" rx="2" />
+  <!-- Row 3 -->
+  <rect x="57" y="163" width="21" height="18" rx="2" />
+  <rect x="89" y="163" width="21" height="18" rx="2" />
+  <rect x="120" y="163" width="21" height="18" rx="2" />
+</svg>

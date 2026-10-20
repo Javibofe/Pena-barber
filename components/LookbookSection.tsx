@@ -51,7 +51,7 @@ export default function LookbookSection() {
               </div>
               <div className="p-5 text-center">
                 <h3 className="font-serif text-lg text-white font-medium">
-                  Low Skin Fade & Textured Crop
+                  Mohicano
                 </h3>
               </div>
             </div>
@@ -75,7 +75,7 @@ export default function LookbookSection() {
                   className="object-cover group-hover:scale-105 transition-transform duration-500"
                 />
                 <div className="absolute top-3 left-3 bg-black/80 backdrop-blur-md px-2.5 py-1 rounded text-[10px] tracking-widest uppercase font-mono text-white border border-white/20">
-                  Taper & Textura
+                  Taper Fade
                 </div>
               </div>
               <div className="p-5 text-center">
@@ -104,7 +104,7 @@ export default function LookbookSection() {
                   className="object-cover group-hover:scale-105 transition-transform duration-500"
                 />
                 <div className="absolute top-3 left-3 bg-black/80 backdrop-blur-md px-2.5 py-1 rounded text-[10px] tracking-widest uppercase font-mono text-white border border-white/20">
-                  Tijera & Fade
+                  Mullet
                 </div>
               </div>
               <div className="p-5 text-center">

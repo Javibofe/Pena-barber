@@ -77,8 +77,40 @@ export default function AdminDashboard() {
   const [password, setPassword] = useState("");
   const [loginError, setLoginError] = useState("");
 
-  const [activeTab, setActiveTab] = useState<"reservadas" | "disponibles" | "generar" | "resenas">("reservadas");
+  const [activeTab, setActiveTab] = useState<"reservadas" | "disponibles" | "clientes" | "generar" | "resenas">("reservadas");
   const [selectedDate, setSelectedDate] = useState(getLocalToday());
+
+  // Client Record & Autocomplete Directory
+  interface ClientDirectoryItem {
+    id: string;
+    full_name: string;
+    phone: string;
+  }
+  const [allClients, setAllClients] = useState<ClientDirectoryItem[]>([]);
+
+  const fetchAllClients = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from("clients")
+        .select("id, full_name, phone")
+        .order("full_name", { ascending: true });
+      if (!error && data) {
+        setAllClients(data);
+      }
+    } catch (e) {
+      console.error("Error cargando directorio de clientes:", e);
+    }
+  }, []);
+
+  // Client Management Tab state
+  const [clientSearchQuery, setClientSearchQuery] = useState("");
+  const [selectedClientForMgmt, setSelectedClientForMgmt] = useState<ClientDirectoryItem | null>(null);
+  const [clientApptsList, setClientApptsList] = useState<any[]>([]);
+  const [clientApptsLoading, setClientApptsLoading] = useState(false);
+  const [selectedBatchApptIds, setSelectedBatchApptIds] = useState<string[]>([]);
+  const [clientApptsFilter, setClientApptsFilter] = useState<"todas" | "futuras" | "pasadas">("todas");
+  const [selectedClientIds, setSelectedClientIds] = useState<string[]>([]);
+  const [isClientSelectMode, setIsClientSelectMode] = useState(false);
 
   // Data
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -86,6 +118,13 @@ export default function AdminDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+
+  const formatClientPhone = (phone?: string | null) => {
+    if (!phone || phone.startsWith("ext_") || phone.startsWith("insta_") || phone.startsWith("sin_tel_")) {
+      return "👤 Cliente Externo";
+    }
+    return phone;
+  };
 
   // Reviews state
   const [adminReviews, setAdminReviews] = useState<any[]>([]);
@@ -112,8 +151,10 @@ export default function AdminDashboard() {
 
   // Recurring appointments
   const [showRecurring, setShowRecurring] = useState(false);
-  const [recName, setRecName] = useState("");
+  const [recFirstName, setRecFirstName] = useState("");
+  const [recLastName, setRecLastName] = useState("");
   const [recPhone, setRecPhone] = useState("");
+  const [showRecSuggestions, setShowRecSuggestions] = useState(false);
   const [recWeekday, setRecWeekday] = useState<number>(4); // Jueves = 4
   const [recTime, setRecTime] = useState("17:00");
   const [recDuration, setRecDuration] = useState<number>(4); // Semanas
@@ -151,37 +192,97 @@ export default function AdminDashboard() {
   const [assignModal, setAssignModal] = useState<{
     isOpen: boolean;
     slotTime: string;
-    clientName: string;
+    clientFirstName: string;
+    clientLastName: string;
     clientPhone: string;
     loading: boolean;
     error: string;
   }>({
     isOpen: false,
     slotTime: "",
-    clientName: "",
+    clientFirstName: "",
+    clientLastName: "",
     clientPhone: "",
     loading: false,
     error: "",
   });
+  const [showAssignSuggestions, setShowAssignSuggestions] = useState(false);
 
   const handleAssignSlot = async (e: React.FormEvent) => {
     e.preventDefault();
     setAssignModal(prev => ({ ...prev, loading: true, error: "" }));
 
+    if (!assignModal.clientFirstName.trim()) {
+      setAssignModal(prev => ({ ...prev, loading: false, error: "Introduce al menos el nombre del cliente." }));
+      return;
+    }
+
+    const rawPhone = assignModal.clientPhone.trim();
+    if (rawPhone) {
+      const phoneRegex = /^[67]\d{8}$/;
+      if (!phoneRegex.test(rawPhone)) {
+        setAssignModal(prev => ({ ...prev, loading: false, error: "Teléfono inválido (9 dígitos, empezando por 6 o 7), o déjalo vacío si es de Instagram." }));
+        return;
+      }
+    }
+
     const appointmentDate = new Date(`${selectedDate}T${assignModal.slotTime}:00`).toISOString();
+    const lastName = assignModal.clientLastName.trim();
+    const fullName = lastName ? `${assignModal.clientFirstName.trim()} ${lastName}` : assignModal.clientFirstName.trim();
 
     try {
-      // Create or find client
-      const { data: client, error: clientError } = await supabase
-        .from("clients")
-        .upsert(
-          { phone: assignModal.clientPhone, full_name: assignModal.clientName },
-          { onConflict: "phone" }
-        )
-        .select()
-        .single();
+      let targetClientId = "";
 
-      if (clientError || !client) throw new Error("Error al guardar cliente");
+      if (rawPhone) {
+        // Si ya existía como cliente externo con este nombre, actualizar su teléfono a su número real
+        const existingExternal = allClients.find(
+          c => c.full_name.trim().toLowerCase() === fullName.toLowerCase() &&
+               (c.phone.startsWith("ext_") || c.phone.startsWith("insta_") || c.phone.startsWith("sin_tel_"))
+        );
+        if (existingExternal) {
+          const { data: updatedClient } = await supabase
+            .from("clients")
+            .update({ phone: rawPhone, full_name: fullName })
+            .eq("id", existingExternal.id)
+            .select()
+            .single();
+          if (updatedClient) targetClientId = updatedClient.id;
+        }
+
+        if (!targetClientId) {
+          // Guardar o actualizar con teléfono real normalmente
+          const { data: client, error: clientError } = await supabase
+            .from("clients")
+            .upsert(
+              { phone: rawPhone, full_name: fullName },
+              { onConflict: "phone" }
+            )
+            .select()
+            .single();
+
+          if (clientError || !client) throw new Error("Error al guardar cliente: " + (clientError?.message || ""));
+          targetClientId = client.id;
+        }
+      } else {
+        // Cliente sin teléfono (cliente externo)
+        const existingClient = allClients.find(c => c.full_name.trim().toLowerCase() === fullName.toLowerCase());
+        if (existingClient) {
+          targetClientId = existingClient.id;
+        } else {
+          const autoExtPhone = `ext_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+          const { data: client, error: clientError } = await supabase
+            .from("clients")
+            .insert({
+              phone: autoExtPhone,
+              full_name: fullName
+            })
+            .select()
+            .single();
+
+          if (clientError || !client) throw new Error("Error al guardar cliente: " + (clientError?.message || ""));
+          targetClientId = client.id;
+        }
+      }
 
       // Check if slot is already booked
       const { data: existingAppts } = await supabase
@@ -198,7 +299,7 @@ export default function AdminDashboard() {
       const { error: apptError } = await supabase
         .from("appointments")
         .insert({
-          client_id: client.id,
+          client_id: targetClientId,
           appointment_date: appointmentDate,
           status: "confirmed"
         });
@@ -206,8 +307,17 @@ export default function AdminDashboard() {
       if (apptError) throw apptError;
 
       // Success
-      setAssignModal(prev => ({ ...prev, isOpen: false, clientName: "", clientPhone: "", loading: false }));
+      setAssignModal(prev => ({
+        ...prev,
+        isOpen: false,
+        clientFirstName: "",
+        clientLastName: "",
+        clientPhone: "",
+        loading: false
+      }));
+      setShowAssignSuggestions(false);
       fetchAppointments(selectedDate);
+      fetchAllClients();
     } catch (error: any) {
       setAssignModal(prev => ({ ...prev, loading: false, error: error.message }));
     }
@@ -287,7 +397,8 @@ export default function AdminDashboard() {
     if (!session) return;
     fetchAppointments(selectedDate);
     fetchSlots(selectedDate);
-  }, [selectedDate, fetchAppointments, fetchSlots, session]);
+    fetchAllClients();
+  }, [selectedDate, fetchAppointments, fetchSlots, fetchAllClients, session]);
 
   useEffect(() => {
     if (!session) return;
@@ -543,29 +654,83 @@ export default function AdminDashboard() {
     e.preventDefault();
     setRecLoading(true);
 
-    const phoneRegex = /^[67]\d{8}$/;
-    if (!phoneRegex.test(recPhone.trim())) {
+    if (!recFirstName.trim()) {
       openConfirm(
-        "Teléfono Inválido", 
-        "Por favor, introduce un número de móvil válido en España (9 dígitos, empezando por 6 o 7).",
+        "Nombre Obligatorio", 
+        "Por favor, introduce al menos el nombre del cliente.",
         () => closeConfirm()
       );
       setRecLoading(false);
       return;
     }
 
+    const rawRecPhone = recPhone.trim();
+    if (rawRecPhone) {
+      const phoneRegex = /^[67]\d{8}$/;
+      if (!phoneRegex.test(rawRecPhone)) {
+        openConfirm(
+          "Teléfono Inválido", 
+          "Por favor, introduce un número de móvil válido en España (9 dígitos, empezando por 6 o 7), o déjalo vacío si es de Instagram.",
+          () => closeConfirm()
+        );
+        setRecLoading(false);
+        return;
+      }
+    }
+
+    const recFullName = recLastName.trim() 
+      ? `${recFirstName.trim()} ${recLastName.trim()}` 
+      : recFirstName.trim();
+
     try {
       // 1. Crear o buscar cliente
-      const { data: clientData, error: clientErr } = await supabase
-        .from("clients")
-        .upsert({ phone: recPhone.trim(), full_name: recName.trim() }, { onConflict: "phone" })
-        .select()
-        .single();
-      
-      if (clientErr || !clientData) throw new Error("Error registrando cliente");
+      let finalClientId = "";
+
+      if (rawRecPhone) {
+        // Si ya existía como cliente externo con este nombre, actualizar su teléfono
+        const existingExternal = allClients.find(
+          c => c.full_name.trim().toLowerCase() === recFullName.toLowerCase() &&
+               (c.phone.startsWith("ext_") || c.phone.startsWith("insta_") || c.phone.startsWith("sin_tel_"))
+        );
+        if (existingExternal) {
+          const { data: updatedClient } = await supabase
+            .from("clients")
+            .update({ phone: rawRecPhone, full_name: recFullName })
+            .eq("id", existingExternal.id)
+            .select()
+            .single();
+          if (updatedClient) finalClientId = updatedClient.id;
+        }
+
+        if (!finalClientId) {
+          const { data: clientData, error: clientErr } = await supabase
+            .from("clients")
+            .upsert({ phone: rawRecPhone, full_name: recFullName }, { onConflict: "phone" })
+            .select()
+            .single();
+          
+          if (clientErr || !clientData) throw new Error("Error registrando cliente: " + (clientErr?.message || ""));
+          finalClientId = clientData.id;
+        }
+      } else {
+        // Sin teléfono (cliente externo)
+        const existing = allClients.find(c => c.full_name.trim().toLowerCase() === recFullName.toLowerCase());
+        if (existing) {
+          finalClientId = existing.id;
+        } else {
+          const autoExtPhone = `ext_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+          const { data: clientData, error: clientErr } = await supabase
+            .from("clients")
+            .insert({ phone: autoExtPhone, full_name: recFullName })
+            .select()
+            .single();
+
+          if (clientErr || !clientData) throw new Error("Error registrando cliente: " + (clientErr?.message || ""));
+          finalClientId = clientData.id;
+        }
+      }
 
       // 2. Calcular las fechas futuras
-      // recWeekday: 1=Lunes ... 7=Domingo (Date.getDay() da 0=Domingo, 1=Lunes...)
       const now = new Date();
       const appointmentsToInsert = [];
       let addedCount = 0;
@@ -586,7 +751,7 @@ export default function AdminDashboard() {
           appointmentDate.setHours(parseInt(hourStr, 10), parseInt(minStr, 10), 0, 0);
 
           appointmentsToInsert.push({
-            client_id: clientData.id,
+            client_id: finalClientId,
             appointment_date: appointmentDate.toISOString(),
             status: "confirmed"
           });
@@ -595,21 +760,176 @@ export default function AdminDashboard() {
         checkDate.setDate(checkDate.getDate() + 1);
       }
 
-      // 3. Insertar ignorando conflictos (upsert con onConflict que ignore)
+      // 3. Insertar ignorando conflictos
       const { error: insertErr } = await supabase
         .from("appointments")
         .upsert(appointmentsToInsert, { onConflict: "appointment_date", ignoreDuplicates: true });
 
       if (insertErr) throw new Error("Error insertando las citas: " + insertErr.message);
 
-      openConfirm("¡Hecho!", `Se han planificado ${recDuration} semanas para ${recName}. Si había alguna hora ya ocupada, se ha respetado.`, () => closeConfirm());
+      openConfirm("¡Hecho!", `Se han planificado ${recDuration} semanas para ${recFullName}. Si había alguna hora ya ocupada, se ha respetado.`, () => closeConfirm());
       setShowRecurring(false);
+      setRecFirstName("");
+      setRecLastName("");
+      setRecPhone("");
+      setShowRecSuggestions(false);
       fetchAppointments(selectedDate);
+      fetchAllClients();
     } catch (err: any) {
       alert(err.message);
     } finally {
       setRecLoading(false);
     }
+  };
+
+  // ─── Handlers: Client Management (Batch & Single) ──────────────────────────
+  const fetchClientAppointments = useCallback(async (client: ClientDirectoryItem) => {
+    setSelectedClientForMgmt(client);
+    setClientApptsLoading(true);
+    setSelectedBatchApptIds([]);
+    try {
+      const { data, error } = await supabase
+        .from("appointments")
+        .select("id, appointment_date, status, created_at")
+        .eq("client_id", client.id)
+        .neq("status", "cancelled")
+        .order("appointment_date", { ascending: false });
+      if (error) throw error;
+      setClientApptsList((data || []).filter((a: any) => a.status !== "cancelled"));
+    } catch (e: any) {
+      alert("Error al cargar citas del cliente: " + e.message);
+    } finally {
+      setClientApptsLoading(false);
+    }
+  }, []);
+
+  const handleBatchCancelClientAppts = () => {
+    if (selectedBatchApptIds.length === 0) return;
+    openConfirm(
+      "Anular Citas Seleccionadas",
+      `¿Seguro que quieres anular ${selectedBatchApptIds.length} cita(s)? Los turnos quedarán libres de inmediato en la web para que otros clientes puedan reservarlos.`,
+      async () => {
+        closeConfirm();
+        const { error } = await supabase
+          .from("appointments")
+          .delete()
+          .in("id", selectedBatchApptIds);
+        if (error) { alert("Error: " + error.message); return; }
+        if (selectedClientForMgmt) fetchClientAppointments(selectedClientForMgmt);
+        fetchAppointments(selectedDate);
+      }
+    );
+  };
+
+  const handleBatchDeleteClientAppts = () => {
+    if (selectedBatchApptIds.length === 0) return;
+    openConfirm(
+      "Eliminar Citas Definitivamente",
+      `¿Seguro que quieres eliminar definitivamente ${selectedBatchApptIds.length} cita(s) de la base de datos?`,
+      async () => {
+        closeConfirm();
+        const { error } = await supabase
+          .from("appointments")
+          .delete()
+          .in("id", selectedBatchApptIds);
+        if (error) { alert("Error: " + error.message); return; }
+        if (selectedClientForMgmt) fetchClientAppointments(selectedClientForMgmt);
+        fetchAppointments(selectedDate);
+      }
+    );
+  };
+
+  const handleSingleCancelClientAppt = (apptId: string) => {
+    openConfirm(
+      "Anular Cita",
+      "¿Seguro que quieres anular esta cita? El turno se liberará de inmediato para que otros clientes puedan reservarlo.",
+      async () => {
+        closeConfirm();
+        const { error } = await supabase
+          .from("appointments")
+          .delete()
+          .eq("id", apptId);
+        if (error) { alert("Error: " + error.message); return; }
+        if (selectedClientForMgmt) fetchClientAppointments(selectedClientForMgmt);
+        fetchAppointments(selectedDate);
+      }
+    );
+  };
+
+  const handleSingleDeleteClientAppt = (apptId: string) => {
+    openConfirm(
+      "Eliminar Cita",
+      "¿Seguro que quieres eliminar esta cita permanentemente de la base de datos?",
+      async () => {
+        closeConfirm();
+        const { error } = await supabase
+          .from("appointments")
+          .delete()
+          .eq("id", apptId);
+        if (error) { alert("Error: " + error.message); return; }
+        if (selectedClientForMgmt) fetchClientAppointments(selectedClientForMgmt);
+        fetchAppointments(selectedDate);
+      }
+    );
+  };
+
+  const handleDeleteClient = (client: ClientDirectoryItem) => {
+    openConfirm(
+      "Eliminar Cliente",
+      `¿Seguro que quieres eliminar a "${client.full_name}"? Se borrarán también todas sus citas registradas en la base de datos.`,
+      async () => {
+        closeConfirm();
+        try {
+          // Eliminar citas asociadas primero
+          await supabase.from("appointments").delete().eq("client_id", client.id);
+          const { error } = await supabase.from("clients").delete().eq("id", client.id);
+          if (error) {
+            alert("Error al eliminar cliente: " + error.message);
+            return;
+          }
+          setAllClients((prev) => prev.filter((c) => c.id !== client.id));
+          setSelectedClientIds((prev) => prev.filter((id) => id !== client.id));
+          if (selectedClientForMgmt?.id === client.id) {
+            setSelectedClientForMgmt(null);
+            setClientApptsList([]);
+          }
+          fetchAppointments(selectedDate);
+        } catch (err: any) {
+          alert("Error: " + err.message);
+        }
+      }
+    );
+  };
+
+  const handleBatchDeleteClients = () => {
+    if (selectedClientIds.length === 0) return;
+    openConfirm(
+      "Eliminar Clientes Seleccionados",
+      `¿Seguro que deseas eliminar los ${selectedClientIds.length} clientes seleccionados? Esta acción eliminará permanentemente sus fichas y todas sus citas registradas.`,
+      async () => {
+        closeConfirm();
+        try {
+          // Eliminar citas de los clientes seleccionados
+          await supabase.from("appointments").delete().in("client_id", selectedClientIds);
+          const { error } = await supabase.from("clients").delete().in("id", selectedClientIds);
+          if (error) {
+            alert("Error al eliminar clientes: " + error.message);
+            return;
+          }
+          const idsToDelete = new Set(selectedClientIds);
+          setAllClients((prev) => prev.filter((c) => !idsToDelete.has(c.id)));
+          if (selectedClientForMgmt && idsToDelete.has(selectedClientForMgmt.id)) {
+            setSelectedClientForMgmt(null);
+            setClientApptsList([]);
+          }
+          setSelectedClientIds([]);
+          setIsClientSelectMode(false);
+          fetchAppointments(selectedDate);
+        } catch (err: any) {
+          alert("Error: " + err.message);
+        }
+      }
+    );
   };
 
   // ─── Derived: Agenda unificada ─────────────────────────────────────────────
@@ -738,11 +1058,11 @@ export default function AdminDashboard() {
 
         {/* TABS */}
         <div className="max-w-4xl mx-auto px-4 flex gap-1 pb-3 overflow-x-auto no-scrollbar">
-          {(["reservadas", "disponibles", "generar", "resenas"] as const).map((tab) => (
+          {(["reservadas", "disponibles", "clientes", "generar", "resenas"] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`relative px-4 py-1.5 rounded-lg text-xs font-mono uppercase tracking-widest transition-all whitespace-nowrap shrink-0 ${
+              className={`relative px-3.5 py-1.5 rounded-lg text-xs font-mono uppercase tracking-widest transition-all whitespace-nowrap shrink-0 ${
                 activeTab === tab ? "text-white" : "text-neutral-500 hover:text-neutral-300"
               }`}
             >
@@ -750,7 +1070,7 @@ export default function AdminDashboard() {
                 <motion.div layoutId="tab-bg" className="absolute inset-0 bg-white/10 rounded-lg" transition={{ type: "spring", bounce: 0.2, duration: 0.4 }} />
               )}
               <span className="relative z-10">
-                {tab === "reservadas" ? "📋 Reservadas" : tab === "disponibles" ? "✅ Libres" : tab === "generar" ? "⚙️ Generar" : "⭐ Reseñas"}
+                {tab === "reservadas" ? "📋 Reservadas" : tab === "disponibles" ? "✅ Libres" : tab === "clientes" ? "👥 Clientes" : tab === "generar" ? "⚙️ Generar" : "⭐ Reseñas"}
               </span>
             </button>
           ))}
@@ -770,7 +1090,7 @@ export default function AdminDashboard() {
                 <motion.section variants={stagger} className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   {[
                     { label: "Total", value: totalCitas, color: "text-white", border: "border-white/10" },
-                    { label: "Activas", value: citasConfirmadas, color: "text-emerald-400", border: "border-emerald-900/40" },
+                    { label: "Activas", value: citasConfirmadas, color: "text-white", border: "border-white/10" },
                     { label: "Faltas", value: faltas, color: "text-red-400", border: "border-red-900/40" },
                   ].map((m) => (
                     <motion.div key={m.label} variants={fadeUp} className={`bg-white/[0.03] border ${m.border} rounded-2xl p-4 flex flex-col items-center justify-center text-center`}>
@@ -900,7 +1220,7 @@ export default function AdminDashboard() {
                                     {appt.clients?.full_name || "Cliente desconocido"}
                                   </p>
                                   <p className={`text-xs font-mono mt-0.5 ${isNoShow ? "text-neutral-700" : "text-neutral-400"}`}>
-                                    📱 {appt.clients?.phone || "Sin teléfono"}
+                                    📱 {formatClientPhone(appt.clients?.phone)}
                                   </p>
                                 </div>
 
@@ -913,7 +1233,7 @@ export default function AdminDashboard() {
                                         <motion.button
                                           whileTap={{ scale: 0.9 }}
                                           onClick={(e) => { e.stopPropagation(); handleUndoNoShow(appt.id); }}
-                                          className="flex flex-col items-center px-2 py-2 rounded-xl bg-emerald-950/30 text-emerald-400 hover:bg-emerald-900/40 border border-emerald-900/30 transition-all text-center min-w-[50px]"
+                                          className="flex flex-col items-center px-2 py-2 rounded-xl bg-white/10 text-white hover:bg-white/20 border border-white/20 transition-all text-center min-w-[50px]"
                                           title="Deshacer falta"
                                         >
                                           <span className="text-base">↩️</span>
@@ -1008,14 +1328,25 @@ export default function AdminDashboard() {
                             >
                               <div className="flex items-center gap-3">
                                 <span className="font-mono text-sm font-bold text-neutral-600 w-12 shrink-0">{entry.time}</span>
-                                <span className="flex-1 text-[10px] text-emerald-500/70 uppercase tracking-widest font-mono">Libre</span>
+                                <span className="flex-1 text-[10px] text-neutral-400 uppercase tracking-widest font-mono">Libre</span>
                               </div>
                               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1 sm:gap-2">
                                 <button
-                                  onClick={() => setAssignModal(prev => ({ ...prev, isOpen: true, slotTime: entry.time, error: "", clientName: "", clientPhone: "" }))}
-                                  className="text-[9px] font-mono uppercase bg-emerald-950/40 text-emerald-400 hover:text-emerald-300 border border-emerald-900/40 hover:border-emerald-500/50 px-2 py-1.5 rounded-lg transition-colors font-bold text-center"
+                                  onClick={() => {
+                                    setAssignModal({
+                                      isOpen: true,
+                                      slotTime: entry.time,
+                                      error: "",
+                                      clientFirstName: "",
+                                      clientLastName: "",
+                                      clientPhone: "",
+                                      loading: false
+                                    });
+                                    setShowAssignSuggestions(false);
+                                  }}
+                                  className="text-[9px] font-mono uppercase bg-white/10 text-white hover:bg-white/20 border border-white/20 px-2.5 py-1.5 rounded-lg transition-colors font-medium text-center"
                                 >
-                                  ✅ Asignar
+                                  + Asignar
                                 </button>
                                 <button
                                   onClick={() => handleBlockSlot(entry.time)}
@@ -1028,6 +1359,401 @@ export default function AdminDashboard() {
                           );
                         })}
                       </AnimatePresence>
+                    </div>
+                  )}
+                </motion.section>
+              </motion.div>
+            );
+          })()}
+
+          {/* ═══════════════════ TAB: CLIENTES Y GESTIÓN MASIVA ═════════════════ */}
+          {activeTab === "clientes" && (() => {
+            const nowFilter = new Date();
+            const filteredClientAppts = clientApptsList
+              .filter((appt) => appt.status !== "cancelled")
+              .filter((appt) => {
+                if (clientApptsFilter === "todas") return true;
+                const isPast = new Date(appt.appointment_date) < nowFilter;
+                if (clientApptsFilter === "futuras") return !isPast;
+                if (clientApptsFilter === "pasadas") return isPast;
+                return true;
+              });
+
+            return (
+              <motion.div key="clientes" variants={stagger} initial="hidden" animate="visible" exit={{ opacity: 0, y: -8 }} className="space-y-6">
+                <motion.section variants={fadeUp} className="bg-white/[0.03] border border-white/10 rounded-2xl p-4 sm:p-5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+                    <div>
+                      <h2 className="text-[10px] uppercase tracking-[0.25em] font-mono text-neutral-400">
+                        Gestión y Citas por Cliente
+                      </h2>
+                      <p className="text-xs text-neutral-400 mt-0.5">
+                        Busca a cualquier cliente para ver todas sus citas, anularlas o eliminarlas por lotes.
+                      </p>
+                    </div>
+                    {selectedClientForMgmt && (
+                      <button
+                        onClick={() => {
+                          setSelectedClientForMgmt(null);
+                          setClientSearchQuery("");
+                          setClientApptsList([]);
+                        }}
+                        className="text-[10px] font-mono uppercase px-3 py-1.5 rounded-lg border border-white/20 text-neutral-300 hover:text-white hover:border-white/40 transition-colors w-fit"
+                      >
+                        🔍 Buscar otro cliente
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Buscador de Cliente y Directorio */}
+                  {!selectedClientForMgmt ? (() => {
+                    const filteredClients = allClients.filter((c) => {
+                      if (!clientSearchQuery.trim()) return true;
+                      const q = clientSearchQuery.toLowerCase();
+                      return (
+                        c.full_name.toLowerCase().includes(q) ||
+                        c.phone.includes(q)
+                      );
+                    });
+
+                    return (
+                      <div className="space-y-3">
+                        <div className="relative">
+                          <input
+                            type="text"
+                            value={clientSearchQuery}
+                            onChange={(e) => setClientSearchQuery(e.target.value)}
+                            placeholder="Buscar por nombre, apellidos o teléfono..."
+                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white placeholder:text-neutral-500 focus:outline-none focus:border-white/30 font-mono"
+                            autoFocus
+                          />
+                          {clientSearchQuery && (
+                            <button
+                              onClick={() => setClientSearchQuery("")}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-white text-xs font-mono"
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Barra de herramientas / Selección múltiple */}
+                        <div className="flex items-center justify-between gap-2 pt-1 pb-1">
+                          <span className="text-[10px] font-mono uppercase tracking-wider text-neutral-400">
+                            {filteredClients.length} {filteredClients.length === 1 ? "cliente" : "clientes"}
+                          </span>
+
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsClientSelectMode(!isClientSelectMode);
+                                setSelectedClientIds([]);
+                              }}
+                              className={`text-[10px] font-mono uppercase px-2.5 py-1.5 rounded-lg border transition-colors ${
+                                isClientSelectMode
+                                  ? "bg-white text-black font-bold border-white"
+                                  : "border-white/15 text-neutral-300 hover:text-white hover:border-white/30"
+                              }`}
+                            >
+                              {isClientSelectMode ? "Cancelar" : "✓ Seleccionar"}
+                            </button>
+
+                            {isClientSelectMode && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (selectedClientIds.length === filteredClients.length) {
+                                      setSelectedClientIds([]);
+                                    } else {
+                                      setSelectedClientIds(filteredClients.map((c) => c.id));
+                                    }
+                                  }}
+                                  className="text-[10px] font-mono uppercase px-2.5 py-1.5 rounded-lg border border-white/15 text-neutral-300 hover:text-white hover:border-white/30 transition-colors"
+                                >
+                                  {selectedClientIds.length === filteredClients.length
+                                    ? "Deseleccionar"
+                                    : `Todo (${filteredClients.length})`}
+                                </button>
+
+                                {selectedClientIds.length > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={handleBatchDeleteClients}
+                                    className="text-[10px] font-mono uppercase px-2.5 py-1.5 rounded-lg bg-red-950/40 text-red-400 hover:bg-red-900/50 border border-red-900/40 transition-colors font-bold flex items-center gap-1.5"
+                                  >
+                                    <span>🗑</span>
+                                    <span>Eliminar ({selectedClientIds.length})</span>
+                                  </button>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Lista de clientes encontrados */}
+                        <div className="space-y-2 max-h-[55vh] overflow-y-auto pr-1 custom-scrollbar">
+                          {filteredClients.map((c) => {
+                            const isSelected = selectedClientIds.includes(c.id);
+
+                            return (
+                              <div
+                                key={c.id}
+                                onClick={() => {
+                                  if (isClientSelectMode) {
+                                    setSelectedClientIds((prev) =>
+                                      prev.includes(c.id)
+                                        ? prev.filter((id) => id !== c.id)
+                                        : [...prev, c.id]
+                                    );
+                                  } else {
+                                    fetchClientAppointments(c);
+                                  }
+                                }}
+                                className={`p-3 border rounded-xl flex items-center justify-between cursor-pointer transition-all group ${
+                                  isSelected
+                                    ? "bg-white/[0.08] border-white/30"
+                                    : "bg-white/[0.02] hover:bg-white/[0.06] border-white/5 hover:border-white/20"
+                                }`}
+                              >
+                                <div className="flex items-center gap-3">
+                                  {isClientSelectMode ? (
+                                    <div
+                                      className={`w-5 h-5 rounded border flex items-center justify-center transition-colors shrink-0 ${
+                                        isSelected
+                                          ? "bg-white border-white text-black"
+                                          : "border-white/20 bg-transparent text-transparent"
+                                      }`}
+                                    >
+                                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                      </svg>
+                                    </div>
+                                  ) : (
+                                    <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-xs font-serif font-bold text-neutral-300 group-hover:text-white group-hover:bg-white/20 transition-colors">
+                                      {c.full_name.charAt(0).toUpperCase()}
+                                    </div>
+                                  )}
+                                  <div>
+                                    <h4 className="text-sm font-medium text-white group-hover:text-white/80 transition-colors">
+                                      {c.full_name}
+                                    </h4>
+                                    <p className="text-[11px] font-mono text-neutral-400 mt-0.5">
+                                      📱 {formatClientPhone(c.phone)}
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                                  {!isClientSelectMode && (
+                                    <>
+                                      <button
+                                        type="button"
+                                        onClick={() => fetchClientAppointments(c)}
+                                        className="text-[10px] font-mono uppercase px-3 py-1.5 rounded-lg bg-white/5 group-hover:bg-white/15 text-neutral-300 group-hover:text-white border border-white/10 transition-colors"
+                                      >
+                                        Ver citas ➔
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeleteClient(c)}
+                                        className="text-[11px] px-2.5 py-1.5 rounded-lg border border-red-900/30 text-red-400/80 hover:text-red-300 hover:border-red-900/50 bg-red-950/20 hover:bg-red-950/40 transition-colors"
+                                        title="Eliminar cliente"
+                                      >
+                                        🗑
+                                      </button>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                          {filteredClients.length === 0 && (
+                            <div className="py-8 text-center text-neutral-500 font-mono text-xs">
+                              {allClients.length === 0
+                                ? "No hay clientes registrados en la base de datos."
+                                : "No se encontraron clientes con esa búsqueda."}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })() : (
+                    /* Ficha del Cliente y Lista de Citas */
+                    <div className="space-y-4">
+                      {/* Tarjeta Cliente */}
+                      <div className="p-3.5 bg-white/[0.03] border border-white/10 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-full bg-white/10 border border-white/20 flex items-center justify-center text-white font-serif font-bold text-sm">
+                            {selectedClientForMgmt.full_name.charAt(0).toUpperCase()}
+                          </div>
+                          <div>
+                            <h3 className="font-serif text-sm sm:text-base text-white font-bold">
+                              {selectedClientForMgmt.full_name}
+                            </h3>
+                            <p className="text-[11px] font-mono text-neutral-400 mt-0.5">
+                              📱 Teléfono: <strong className="text-neutral-200">{formatClientPhone(selectedClientForMgmt.phone)}</strong>
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-[10px] font-mono uppercase px-2.5 py-1.5 rounded-full bg-white/10 text-neutral-300 border border-white/10 w-fit">
+                            {clientApptsList.length} {clientApptsList.length === 1 ? "cita total" : "citas totales"}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteClient(selectedClientForMgmt)}
+                            className="text-[10px] font-mono uppercase px-2.5 py-1.5 rounded-lg bg-red-950/30 text-red-400 hover:text-red-300 border border-red-900/30 hover:border-red-900/50 transition-colors flex items-center gap-1.5"
+                            title="Eliminar este cliente y todas sus citas"
+                          >
+                            <span>🗑</span>
+                            <span>Eliminar Cliente</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Toolbar: Filtros y Acciones por Lotes */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-1">
+                        <div className="flex items-center gap-1 bg-white/5 p-1 rounded-lg border border-white/10 w-fit">
+                          {(["todas", "futuras", "pasadas"] as const).map((fil) => (
+                            <button
+                              key={fil}
+                              onClick={() => setClientApptsFilter(fil)}
+                              className={`text-[10px] font-mono uppercase px-2.5 py-1 rounded transition-colors capitalize ${
+                                clientApptsFilter === fil
+                                  ? "bg-white text-black font-bold"
+                                  : "text-neutral-400 hover:text-white"
+                              }`}
+                            >
+                              {fil}
+                            </button>
+                          ))}
+                        </div>
+
+                        {/* Botones de acción masiva */}
+                        {filteredClientAppts.length > 0 && (
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <button
+                              onClick={() => {
+                                if (selectedBatchApptIds.length === filteredClientAppts.length) {
+                                  setSelectedBatchApptIds([]);
+                                } else {
+                                  setSelectedBatchApptIds(filteredClientAppts.map((a) => a.id));
+                                }
+                              }}
+                              className="text-[10px] font-mono uppercase px-2.5 py-1.5 rounded-lg border border-white/15 text-neutral-300 hover:text-white hover:border-white/30 transition-colors"
+                            >
+                              {selectedBatchApptIds.length === filteredClientAppts.length
+                                ? "Deseleccionar"
+                                : `Seleccionar todas (${filteredClientAppts.length})`}
+                            </button>
+
+                            {selectedBatchApptIds.length > 0 && (
+                              <button
+                                onClick={handleBatchCancelClientAppts}
+                                className="text-[10px] font-mono uppercase px-2.5 py-1.5 rounded-lg bg-red-950/40 text-red-400 hover:bg-red-900/50 border border-red-900/40 transition-colors font-bold flex items-center gap-1.5"
+                                title="Anular citas seleccionadas y liberar los huecos en la web"
+                              >
+                                <span>🗑</span>
+                                <span>Anular ({selectedBatchApptIds.length})</span>
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Lista de Citas del Cliente */}
+                      {clientApptsLoading ? (
+                        <div className="py-12 text-center">
+                          <div className="w-5 h-5 rounded-full border-2 border-white/20 border-t-white animate-spin mx-auto mb-2" />
+                          <p className="text-xs font-mono text-neutral-400">Cargando citas...</p>
+                        </div>
+                      ) : filteredClientAppts.length === 0 ? (
+                        <div className="py-8 text-center border border-dashed border-white/10 rounded-xl">
+                          <p className="text-xs font-mono text-neutral-400">No hay citas en este filtro.</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {filteredClientAppts.map((appt) => {
+                            const dateObj = new Date(appt.appointment_date);
+                            const isPast = dateObj < nowFilter;
+                            const isSelected = selectedBatchApptIds.includes(appt.id);
+                            const dayStr = dateObj.toLocaleDateString("es-ES", {
+                              weekday: "short",
+                              day: "numeric",
+                              month: "short",
+                              year: "numeric",
+                            });
+                            const hours = String(dateObj.getHours()).padStart(2, "0");
+                            const minutes = String(dateObj.getMinutes()).padStart(2, "0");
+                            const timeStr = `${hours}:${minutes} hs`;
+
+                            return (
+                              <div
+                                key={appt.id}
+                                onClick={() => {
+                                  setSelectedBatchApptIds((prev) =>
+                                    prev.includes(appt.id)
+                                      ? prev.filter((id) => id !== appt.id)
+                                      : [...prev, appt.id]
+                                  );
+                                }}
+                                className={`p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer transition-all ${
+                                  isSelected
+                                    ? "bg-white/[0.08] border-white/30"
+                                    : "bg-white/[0.02] border-white/5 hover:border-white/15"
+                                }`}
+                              >
+                                <div className="flex items-center gap-3">
+                                  <div
+                                    className={`w-4 h-4 rounded border flex items-center justify-center transition-colors shrink-0 ${
+                                      isSelected
+                                        ? "bg-white border-white text-black"
+                                        : "border-white/20 bg-transparent text-transparent"
+                                    }`}
+                                  >
+                                    <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                    </svg>
+                                  </div>
+
+                                  <div>
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-mono text-sm font-bold text-white">{timeStr}</span>
+                                      <span className="text-neutral-500 text-xs">—</span>
+                                      <span className="text-xs text-neutral-300 font-mono capitalize">{dayStr}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 mt-0.5">
+                                      {isPast ? (
+                                        <span className="text-[9px] uppercase font-mono tracking-wider px-2 py-0.5 rounded bg-neutral-900 text-neutral-500 border border-white/5">
+                                          Pasada
+                                        </span>
+                                      ) : (
+                                        <span className="text-[9px] uppercase font-mono tracking-widest px-2.5 py-0.5 rounded-full bg-white/10 text-white border border-white/20 font-medium">
+                                          Confirmada
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-1.5 self-end sm:self-auto" onClick={(e) => e.stopPropagation()}>
+                                  <button
+                                    onClick={() => handleSingleCancelClientAppt(appt.id)}
+                                    className="text-[9px] font-mono uppercase px-2.5 py-1 rounded-lg bg-red-950/20 text-red-400/80 hover:text-red-300 border border-red-900/20 hover:border-red-900/40 transition-colors flex items-center gap-1"
+                                    title={isPast ? "Borrar registro de cita pasada" : "Anular cita y liberar turno en la web"}
+                                  >
+                                    <span>🗑</span>
+                                    <span>{isPast ? "Borrar" : "Anular"}</span>
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   )}
                 </motion.section>
@@ -1124,7 +1850,7 @@ export default function AdminDashboard() {
                 <AnimatePresence>
                   {genStatus && (
                     <motion.p initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                      className={`mt-3 text-center text-xs font-mono ${genStatus.startsWith("✓") ? "text-emerald-400" : "text-red-400"}`}>
+                      className={`mt-3 text-center text-xs font-mono ${genStatus.startsWith("✓") ? "text-white" : "text-red-400"}`}>
                       {genStatus}
                     </motion.p>
                   )}
@@ -1234,7 +1960,7 @@ export default function AdminDashboard() {
 
                             {!isEditing && (
                               apptOnSlot
-                                ? <span className="flex-1 text-[10px] text-emerald-500/70 font-mono uppercase tracking-widest">Reservado</span>
+                                ? <span className="flex-1 text-[10px] text-neutral-300 font-mono uppercase tracking-widest">Reservado</span>
                                 : <span className="flex-1 text-[10px] text-neutral-600 font-mono uppercase tracking-widest">Libre</span>
                             )}
                             {isEditing && (
@@ -1247,7 +1973,7 @@ export default function AdminDashboard() {
                               <div className="flex items-center gap-1.5 shrink-0">
                                 {isEditing ? (
                                   <>
-                                    <button onClick={(e) => { e.stopPropagation(); handleEditSlot(slot); }} className="text-[9px] font-mono uppercase bg-emerald-900/40 text-emerald-400 border border-emerald-900/40 px-2 py-1 rounded-lg hover:bg-emerald-900/60">✓</button>
+                                    <button onClick={(e) => { e.stopPropagation(); handleEditSlot(slot); }} className="text-[9px] font-mono uppercase bg-white/10 text-white border border-white/20 px-2 py-1 rounded-lg hover:bg-white/20">✓</button>
                                     <button onClick={(e) => { e.stopPropagation(); setEditingSlot(null); setEditTime(""); }} className="text-[9px] font-mono uppercase bg-white/5 text-neutral-400 border border-white/10 px-2 py-1 rounded-lg">✕</button>
                                   </>
                                 ) : (
@@ -1390,14 +2116,108 @@ export default function AdminDashboard() {
               <p className="text-xs text-neutral-400 font-light mb-6">Reserva la misma hora, el mismo día, todas las semanas.</p>
               
               <form onSubmit={handleRecurringSubmit} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-[10px] uppercase font-mono text-neutral-500 mb-1">Nombre</label>
-                    <input type="text" required value={recName} onChange={e => setRecName(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-xs text-white" placeholder="Ej. Juan Pérez"/>
+                {/* Nombre y Apellidos con Autocompletado */}
+                <div className="relative">
+                  <div className="grid grid-cols-2 gap-3 mb-2">
+                    <div>
+                      <label className="block text-[10px] uppercase font-mono text-neutral-400 mb-1">Nombre *</label>
+                      <input
+                        type="text"
+                        required
+                        value={recFirstName}
+                        onChange={e => {
+                          setRecFirstName(e.target.value);
+                          setShowRecSuggestions(true);
+                        }}
+                        onFocus={() => setShowRecSuggestions(true)}
+                        onBlur={() => setTimeout(() => setShowRecSuggestions(false), 200)}
+                        className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-white font-mono"
+                        placeholder="Ej. Juan"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] uppercase font-mono text-neutral-400 mb-1">Apellidos <span className="text-neutral-500 lowercase">(opcional)</span></label>
+                      <input
+                        type="text"
+                        value={recLastName}
+                        onChange={e => {
+                          setRecLastName(e.target.value);
+                          setShowRecSuggestions(true);
+                        }}
+                        onFocus={() => setShowRecSuggestions(true)}
+                        onBlur={() => setTimeout(() => setShowRecSuggestions(false), 200)}
+                        className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-white font-mono"
+                        placeholder="Ej. Pérez"
+                      />
+                    </div>
                   </div>
+
+                  {/* Sugerencias Autocompletado Recurrentes (sólo si hay coincidencias para no tapar el label) */}
+                  {(() => {
+                    const q = `${recFirstName} ${recLastName}`.trim().toLowerCase();
+                    if (!showRecSuggestions || !q) return null;
+                    const filtered = allClients.filter(c => {
+                      const matchName = c.full_name.toLowerCase().includes(q);
+                      const matchPhone = c.phone && !c.phone.startsWith("ext_") && !c.phone.startsWith("insta_") && c.phone.includes(q);
+                      return matchName || matchPhone;
+                    });
+                    if (filtered.length === 0) return null;
+                    return (
+                      <div className="absolute top-[64px] left-0 right-0 z-50 bg-[#161616] border border-white/20 rounded-xl shadow-2xl max-h-48 overflow-y-auto p-1 space-y-1">
+                        <div className="flex items-center justify-between px-2.5 py-1 border-b border-white/10 text-[9px] font-mono text-neutral-400">
+                          <span>Sugerencias ({filtered.length})</span>
+                          <button
+                            type="button"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              setShowRecSuggestions(false);
+                            }}
+                            className="text-neutral-400 hover:text-white px-1.5 py-0.5 rounded hover:bg-white/10 transition-colors"
+                          >
+                            ✕ Cerrar
+                          </button>
+                        </div>
+                        {filtered.map(c => {
+                          const parts = c.full_name.trim().split(" ");
+                          const fName = parts[0] || "";
+                          const lName = parts.slice(1).join(" ");
+                          const isExternal = c.phone.startsWith("ext_") || c.phone.startsWith("insta_") || c.phone.startsWith("sin_tel_");
+                          return (
+                            <button
+                              key={c.id}
+                              type="button"
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                setRecFirstName(fName);
+                                setRecLastName(lName);
+                                setRecPhone(isExternal ? "" : c.phone);
+                                setShowRecSuggestions(false);
+                              }}
+                              className="w-full text-left px-3 py-1.5 rounded-lg hover:bg-white/10 transition-colors flex items-center justify-between text-xs group"
+                            >
+                              <span className="text-white group-hover:text-white/80 transition-colors">{c.full_name}</span>
+                              <span className="font-mono text-[11px] text-neutral-400">
+                                {isExternal ? "👤 Cliente Externo" : c.phone}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
+
                   <div>
-                    <label className="block text-[10px] uppercase font-mono text-neutral-500 mb-1">Teléfono</label>
-                    <input type="tel" required value={recPhone} onChange={e => setRecPhone(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-xs text-white" placeholder="Ej. 600123456"/>
+                    <label className="block text-[10px] uppercase font-mono text-neutral-400 mb-1">
+                      Teléfono Móvil <span className="text-neutral-500 lowercase">(opcional - cliente externo)</span>
+                    </label>
+                    <input
+                      type="tel"
+                      value={recPhone}
+                      onChange={e => setRecPhone(e.target.value)}
+                      onFocus={() => setShowRecSuggestions(false)}
+                      className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-white font-mono"
+                      placeholder="Ej. 600123456 (o vacío si es externo)"
+                    />
                   </div>
                 </div>
 
@@ -1459,16 +2279,115 @@ export default function AdminDashboard() {
               className="relative w-full max-w-sm bg-[#111] border border-white/10 p-6 rounded-2xl shadow-2xl flex flex-col"
             >
               <h3 className="font-serif text-lg text-white mb-1">Asignar Turno - {assignModal.slotTime}</h3>
-              <p className="text-xs text-neutral-400 font-light mb-6">Asigna este hueco a un cliente manualmente.</p>
+              <p className="text-xs text-neutral-400 font-light mb-4">Asigna este hueco a un cliente manualmente.</p>
               
               <form onSubmit={handleAssignSlot} className="space-y-4">
-                <div>
-                  <label className="block text-[10px] uppercase font-mono text-neutral-500 mb-1">Nombre del Cliente</label>
-                  <input type="text" required value={assignModal.clientName} onChange={e => setAssignModal(prev => ({ ...prev, clientName: e.target.value }))} className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-xs text-white" placeholder="Ej. Javier"/>
-                </div>
-                <div>
-                  <label className="block text-[10px] uppercase font-mono text-neutral-500 mb-1">Teléfono</label>
-                  <input type="tel" required value={assignModal.clientPhone} onChange={e => setAssignModal(prev => ({ ...prev, clientPhone: e.target.value }))} className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-xs text-white" placeholder="Ej. 600123456"/>
+                {/* Nombre y Apellidos con Autocompletado */}
+                <div className="relative">
+                  <div className="grid grid-cols-2 gap-2.5 mb-2">
+                    <div>
+                      <label className="block text-[10px] uppercase font-mono text-neutral-400 mb-1">Nombre *</label>
+                      <input
+                        type="text"
+                        required
+                        value={assignModal.clientFirstName}
+                        onChange={e => {
+                          setAssignModal(prev => ({ ...prev, clientFirstName: e.target.value }));
+                          setShowAssignSuggestions(true);
+                        }}
+                        onFocus={() => setShowAssignSuggestions(true)}
+                        onBlur={() => setTimeout(() => setShowAssignSuggestions(false), 200)}
+                        className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-white font-mono"
+                        placeholder="Ej. Javier"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] uppercase font-mono text-neutral-400 mb-1">Apellidos <span className="text-neutral-500 lowercase">(opcional)</span></label>
+                      <input
+                        type="text"
+                        value={assignModal.clientLastName}
+                        onChange={e => {
+                          setAssignModal(prev => ({ ...prev, clientLastName: e.target.value }));
+                          setShowAssignSuggestions(true);
+                        }}
+                        onFocus={() => setShowAssignSuggestions(true)}
+                        onBlur={() => setTimeout(() => setShowAssignSuggestions(false), 200)}
+                        className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-white font-mono"
+                        placeholder="Ej. Bofill"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Desplegable Autocompletado (sólo si hay coincidencias para no tapar el label) */}
+                  {(() => {
+                    const q = `${assignModal.clientFirstName} ${assignModal.clientLastName}`.trim().toLowerCase();
+                    if (!showAssignSuggestions || !q) return null;
+                    const filtered = allClients.filter(c => {
+                      const matchName = c.full_name.toLowerCase().includes(q);
+                      const matchPhone = c.phone && !c.phone.startsWith("ext_") && !c.phone.startsWith("insta_") && c.phone.includes(q);
+                      return matchName || matchPhone;
+                    });
+                    if (filtered.length === 0) return null;
+                    return (
+                      <div className="absolute top-[64px] left-0 right-0 z-50 bg-[#161616] border border-white/20 rounded-xl shadow-2xl max-h-48 overflow-y-auto p-1 space-y-1">
+                        <div className="flex items-center justify-between px-2.5 py-1 border-b border-white/10 text-[9px] font-mono text-neutral-400">
+                          <span>Sugerencias ({filtered.length})</span>
+                          <button
+                            type="button"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              setShowAssignSuggestions(false);
+                            }}
+                            className="text-neutral-400 hover:text-white px-1.5 py-0.5 rounded hover:bg-white/10 transition-colors"
+                          >
+                            ✕ Cerrar
+                          </button>
+                        </div>
+                        {filtered.map(c => {
+                          const parts = c.full_name.trim().split(" ");
+                          const fName = parts[0] || "";
+                          const lName = parts.slice(1).join(" ");
+                          const isExternal = c.phone.startsWith("ext_") || c.phone.startsWith("insta_") || c.phone.startsWith("sin_tel_");
+                          return (
+                            <button
+                              key={c.id}
+                              type="button"
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                setAssignModal(prev => ({
+                                  ...prev,
+                                  clientFirstName: fName,
+                                  clientLastName: lName,
+                                  clientPhone: isExternal ? "" : c.phone
+                                }));
+                                setShowAssignSuggestions(false);
+                              }}
+                              className="w-full text-left px-3 py-1.5 rounded-lg hover:bg-white/10 transition-colors flex items-center justify-between text-xs group"
+                            >
+                              <span className="text-white group-hover:text-white/80 transition-colors">{c.full_name}</span>
+                              <span className="font-mono text-[11px] text-neutral-400">
+                                {isExternal ? "👤 Cliente Externo" : c.phone}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
+
+                  <div>
+                    <label className="block text-[10px] uppercase font-mono text-neutral-400 mb-1">
+                      Teléfono Móvil <span className="text-neutral-500 lowercase">(opcional - cliente externo)</span>
+                    </label>
+                    <input
+                      type="tel"
+                      value={assignModal.clientPhone}
+                      onChange={e => setAssignModal(prev => ({ ...prev, clientPhone: e.target.value }))}
+                      onFocus={() => setShowAssignSuggestions(false)}
+                      className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-white font-mono"
+                      placeholder="Ej. 600123456 (o vacío si es externo)"
+                    />
+                  </div>
                 </div>
 
                 {assignModal.error && (
@@ -1477,8 +2396,8 @@ export default function AdminDashboard() {
 
                 <div className="flex items-center gap-3 mt-6 pt-2">
                   <button type="button" onClick={() => setAssignModal(prev => ({ ...prev, isOpen: false }))} disabled={assignModal.loading} className="flex-1 py-2.5 rounded-lg border border-white/10 text-white text-[10px] uppercase font-mono tracking-widest hover:bg-white/5 transition-colors disabled:opacity-50">Cancelar</button>
-                  <button type="submit" disabled={assignModal.loading} className="flex-1 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] uppercase font-mono tracking-widest transition-colors font-bold disabled:opacity-50 flex justify-center">
-                    {assignModal.loading ? <div className="w-4 h-4 rounded-full border-2 border-white/20 border-t-white animate-spin"/> : "Asignar"}
+                  <button type="submit" disabled={assignModal.loading} className="flex-1 py-2.5 rounded-lg bg-white hover:bg-neutral-200 text-black text-[10px] uppercase font-mono tracking-widest transition-colors font-bold disabled:opacity-50 flex justify-center">
+                    {assignModal.loading ? <div className="w-4 h-4 rounded-full border-2 border-black/20 border-t-black animate-spin"/> : "Asignar"}
                   </button>
                 </div>
               </form>

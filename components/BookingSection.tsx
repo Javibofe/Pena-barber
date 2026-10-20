@@ -48,12 +48,28 @@ export default function BookingSection() {
   const [monthSlots, setMonthSlots] = useState<Record<string, string[]>>({});
   const [isLoadingHours, setIsLoadingHours] = useState(false);
 
-  const [clientName, setClientName] = useState("");
+  const [clientFirstName, setClientFirstName] = useState("");
+  const [clientLastName, setClientLastName] = useState("");
   const [clientPhone, setClientPhone] = useState("");
   const [isLegalAccepted, setIsLegalAccepted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [bookingMessage, setBookingMessage] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
+
+  // Cargar datos previos de cliente si ya reservó desde este dispositivo
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("pena_barber_client");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.firstName) setClientFirstName(parsed.firstName);
+        if (parsed.lastName) setClientLastName(parsed.lastName);
+        if (parsed.phone) setClientPhone(parsed.phone);
+      }
+    } catch (e) {
+      console.error("Error al cargar datos locales del cliente:", e);
+    }
+  }, []);
 
   // Efecto: carga slots disponibles Y citas ocupadas del mes seleccionado
   useEffect(() => {
@@ -85,27 +101,30 @@ export default function BookingSection() {
         Object.keys(groupedSlots).forEach((k) => groupedSlots[k].sort());
         setMonthSlots(groupedSlots);
 
-        // Citas ocupadas del mes
+        // Citas ocupadas del mes (excluyendo canceladas y faltas)
         const { data: apptData, error: apptError } = await supabase
           .from("appointments")
           .select("appointment_date, status")
           .gte("appointment_date", startOfMonth.toISOString())
           .lte("appointment_date", endOfMonth.toISOString())
+          .neq("status", "cancelled")
           .neq("status", "no-show");
 
         if (apptError) throw apptError;
 
         const groupedOccupied: Record<string, string[]> = {};
-        (apptData || []).forEach((appt: any) => {
-          const d = new Date(appt.appointment_date);
-          const yyyy = d.getFullYear();
-          const mm = String(d.getMonth() + 1).padStart(2, "0");
-          const dd = String(d.getDate()).padStart(2, "0");
-          const dateKey = `${yyyy}-${mm}-${dd}`;
-          const time = d.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
-          if (!groupedOccupied[dateKey]) groupedOccupied[dateKey] = [];
-          groupedOccupied[dateKey].push(time);
-        });
+        (apptData || [])
+          .filter((appt: any) => appt.status !== "cancelled" && appt.status !== "no-show")
+          .forEach((appt: any) => {
+            const d = new Date(appt.appointment_date);
+            const yyyy = d.getFullYear();
+            const mm = String(d.getMonth() + 1).padStart(2, "0");
+            const dd = String(d.getDate()).padStart(2, "0");
+            const dateKey = `${yyyy}-${mm}-${dd}`;
+            const time = d.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+            if (!groupedOccupied[dateKey]) groupedOccupied[dateKey] = [];
+            groupedOccupied[dateKey].push(time);
+          });
         setMonthOccupied(groupedOccupied);
 
       } catch (err) {
@@ -145,31 +164,73 @@ export default function BookingSection() {
       return;
     }
 
+    if (!clientFirstName.trim()) {
+      setErrorMsg("Por favor, introduce tu nombre.");
+      return;
+    }
+    if (!clientLastName.trim()) {
+      setErrorMsg("Por favor, introduce tus apellidos.");
+      return;
+    }
     const phoneRegex = /^[67]\d{8}$/;
     if (!phoneRegex.test(clientPhone.trim())) {
       setErrorMsg("Móvil inválido (9 dígitos, empezando por 6 o 7).");
       return;
     }
-    if (!clientName.trim()) {
-      setErrorMsg("Por favor, introduce tu nombre.");
-      return;
-    }
 
     setIsLoading(true);
-    //prueba
+    const fullName = `${clientFirstName.trim()} ${clientLastName.trim()}`;
+
     try {
       // Paso A: Upsert de Cliente
-      const { data: clientData, error: clientError } = await supabase
+      // Si el cliente fue añadido previamente como "Cliente Externo", actualizamos su registro a su teléfono real
+      let clientData: any = null;
+      const { data: externalClient } = await supabase
         .from("clients")
-        .upsert(
-          { phone: clientPhone.trim(), full_name: clientName.trim() },
-          { onConflict: "phone" }
-        )
-        .select()
-        .single();
+        .select("id, phone")
+        .eq("full_name", fullName)
+        .or("phone.like.ext_%,phone.like.insta_%,phone.like.sin_tel_%")
+        .limit(1)
+        .maybeSingle();
 
-      if (clientError || !clientData) {
-        throw new Error(clientError?.message || "Error al registrar cliente.");
+      if (externalClient) {
+        const { data: updated } = await supabase
+          .from("clients")
+          .update({ phone: clientPhone.trim() })
+          .eq("id", externalClient.id)
+          .select()
+          .single();
+        if (updated) clientData = updated;
+      }
+
+      if (!clientData) {
+        const { data, error: clientError } = await supabase
+          .from("clients")
+          .upsert(
+            { phone: clientPhone.trim(), full_name: fullName },
+            { onConflict: "phone" }
+          )
+          .select()
+          .single();
+
+        if (clientError || !data) {
+          throw new Error(clientError?.message || "Error al registrar cliente.");
+        }
+        clientData = data;
+      }
+
+      // Guardar en localStorage para agilizar futuras reservas
+      try {
+        localStorage.setItem(
+          "pena_barber_client",
+          JSON.stringify({
+            firstName: clientFirstName.trim(),
+            lastName: clientLastName.trim(),
+            phone: clientPhone.trim(),
+          })
+        );
+      } catch (e) {
+        console.error("Error guardando cliente en localStorage:", e);
       }
 
       // Preparar el timestamptz
@@ -194,7 +255,7 @@ export default function BookingSection() {
       }
 
       setBookingMessage(
-        `✓ Cita confirmada para ${clientName.trim()} el ${getDisplayDate()} a las ${selectedHour} hs para ${selectedService.name} (${selectedService.price}).`
+        `✓ Cita confirmada para ${fullName} el ${getDisplayDate()} a las ${selectedHour} hs para ${selectedService.name} (${selectedService.price}).`
       );
 
       // Paso C: Notificar al barbero
@@ -203,7 +264,7 @@ export default function BookingSection() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            clientName: clientName.trim(),
+            clientName: fullName,
             clientPhone: clientPhone.trim(),
             service: selectedService.name,
             date: getDisplayDate(),
@@ -394,10 +455,9 @@ export default function BookingSection() {
                   </div>
 
                   {isLoadingHours ? (
-                    <div className="flex justify-center py-6">
-                      <span className="material-symbols-outlined animate-spin text-neutral-500 text-2xl">
-                        sync
-                      </span>
+                    <div className="flex flex-col items-center justify-center py-8">
+                      <div className="w-6 h-6 rounded-full border-2 border-white/20 border-t-white animate-spin mb-2" />
+                      <span className="text-[11px] font-mono text-neutral-400">Cargando turnos...</span>
                     </div>
                   ) : availableHours.length === 0 ? (
                     <div className="text-center text-xs text-neutral-500 py-6 border border-dashed border-border-subtle rounded bg-surface-elevated/30">
@@ -479,22 +539,46 @@ export default function BookingSection() {
                   </div>
                 </div>
 
-                {/* Formulario Rápido */}
+                {/* Formulario Rápido con Nombre, Apellidos y Teléfono */}
                 <div className="space-y-3 pt-2">
-                  <input
-                    value={clientName}
-                    onChange={(e) => setClientName(e.target.value)}
-                    className="w-full bg-surface-elevated border border-border-subtle rounded px-3.5 py-2.5 text-xs text-white placeholder:text-neutral-500 focus:outline-none focus:border-white transition-colors"
-                    placeholder="Tu nombre completo"
-                    type="text"
-                  />
-                  <input
-                    value={clientPhone}
-                    onChange={(e) => setClientPhone(e.target.value)}
-                    className="w-full bg-surface-elevated border border-border-subtle rounded px-3.5 py-2.5 text-xs text-white placeholder:text-neutral-500 focus:outline-none focus:border-white transition-colors"
-                    placeholder="Teléfono para confirmar por WhatsApp"
-                    type="tel"
-                  />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div>
+                      <label className="block text-[10px] uppercase font-mono tracking-wider text-neutral-400 mb-1">
+                        Nombre
+                      </label>
+                      <input
+                        value={clientFirstName}
+                        onChange={(e) => setClientFirstName(e.target.value)}
+                        className="w-full bg-surface-elevated border border-border-subtle rounded px-3 py-2 text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-white transition-colors font-mono"
+                        placeholder="Ej. Javier"
+                        type="text"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] uppercase font-mono tracking-wider text-neutral-400 mb-1">
+                        Apellidos
+                      </label>
+                      <input
+                        value={clientLastName}
+                        onChange={(e) => setClientLastName(e.target.value)}
+                        className="w-full bg-surface-elevated border border-border-subtle rounded px-3 py-2 text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-white transition-colors font-mono"
+                        placeholder="Ej. Bofill"
+                        type="text"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] uppercase font-mono tracking-wider text-neutral-400 mb-1">
+                      Teléfono Móvil
+                    </label>
+                    <input
+                      value={clientPhone}
+                      onChange={(e) => setClientPhone(e.target.value)}
+                      className="w-full bg-surface-elevated border border-border-subtle rounded px-3 py-2 text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-white transition-colors font-mono"
+                      placeholder="Ej. 600123456"
+                      type="tel"
+                    />
+                  </div>
                 </div>
               </div>
 
