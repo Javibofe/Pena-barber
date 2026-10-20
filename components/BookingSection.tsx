@@ -35,6 +35,19 @@ function getLocalToday() {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+function isPastTime(dateStr: string, timeStr: string): boolean {
+  const today = getLocalToday();
+  if (dateStr < today) return true;
+  if (dateStr > today) return false;
+
+  const now = new Date();
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+  const [h, m] = timeStr.split(":").map(Number);
+  const slotMinutes = h * 60 + m;
+
+  return slotMinutes <= currentMinutes;
+}
+
 export default function BookingSection() {
   const currentYear = new Date().getFullYear();
   const currentMonthNum = new Date().getMonth();
@@ -43,6 +56,13 @@ export default function BookingSection() {
   const [selectedMonth, setSelectedMonth] = useState(currentMonthNum);
   const [selectedDateStr, setSelectedDateStr] = useState<string>(getLocalToday());
   const [selectedHour, setSelectedHour] = useState("");
+  const [, setCurrentMinuteTick] = useState(Date.now());
+
+  // Actualizar periódicamente para que las horas que van pasando expiren en tiempo real
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentMinuteTick(Date.now()), 30000);
+    return () => clearInterval(timer);
+  }, []);
 
   const [monthOccupied, setMonthOccupied] = useState<Record<string, string[]>>({});
   const [monthSlots, setMonthSlots] = useState<Record<string, string[]>>({});
@@ -139,14 +159,17 @@ export default function BookingSection() {
 
   const occupiedHours = selectedDateStr ? (monthOccupied[selectedDateStr] || []) : [];
   const availableSlots = selectedDateStr ? (monthSlots[selectedDateStr] || []) : [];
-  const availableHours = availableSlots.filter((h) => !occupiedHours.includes(h)).sort();
+  // Solo horas no ocupadas Y que no hayan pasado ya hoy
+  const availableHours = availableSlots
+    .filter((h) => !occupiedHours.includes(h) && !isPastTime(selectedDateStr, h))
+    .sort();
 
-  // Un día se deshabilita si no tiene turnos definidos, o todos están ocupados
+  // Un día se deshabilita si no tiene turnos definidos, o todos están ocupados / ya han pasado
   const isFull = (fullDate: string) => {
     const daySlots = monthSlots[fullDate] || [];
     const dayOccupied = monthOccupied[fullDate] || [];
     if (daySlots.length === 0) return true;
-    return daySlots.every((s) => dayOccupied.includes(s));
+    return daySlots.every((s) => dayOccupied.includes(s) || isPastTime(fullDate, s));
   };
 
   const handleConfirm = async () => {
@@ -161,6 +184,10 @@ export default function BookingSection() {
     }
     if (!selectedHour) {
       setErrorMsg("Por favor, selecciona una hora.");
+      return;
+    }
+    if (isPastTime(selectedDateStr, selectedHour)) {
+      setErrorMsg("Esa hora ya ha pasado. Por favor, selecciona una hora posterior.");
       return;
     }
 
