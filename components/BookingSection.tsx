@@ -10,14 +10,14 @@ const SERVICES = [
     id: "corte",
     name: "Corte",
     price: "7€",
-    duration: "35 min",
+    duration: "30 min",
     desc: "Corte personalizado a tu gusto. El buen hacer de toda la vida, rematado a navaja.",
   },
   {
     id: "barba",
     name: "Corte + barba",
     price: "9€",
-    duration: "40 min",
+    duration: "30 min",
     desc: "El arreglo completo. Corte a tu estilo y perfilado de barba para salir como nuevo.",
   },
 ];
@@ -334,8 +334,8 @@ export default function BookingSection() {
                     key={srv.id}
                     onClick={() => setSelectedService(srv)}
                     className={`text-left p-4 rounded transition-all flex flex-col justify-between border-2 ${selectedService.id === srv.id
-                        ? "bg-surface-elevated border-white"
-                        : "bg-surface-card border-border-subtle hover:border-neutral-500"
+                      ? "bg-surface-elevated border-white"
+                      : "bg-surface-card border-border-subtle hover:border-neutral-500"
                       }`}
                     type="button"
                   >
@@ -422,10 +422,10 @@ export default function BookingSection() {
                         setSelectedHour("");
                       }}
                       className={`py-3 rounded text-center text-xs font-mono transition-colors ${isDisabled
-                          ? "opacity-20 text-neutral-500 cursor-not-allowed"
-                          : isSelected
-                            ? "bg-white text-black font-bold shadow-[0_0_15px_rgba(255,255,255,0.4)]"
-                            : "text-neutral-300 hover:bg-neutral-800 bg-surface-elevated/50"
+                        ? "opacity-20 text-neutral-500 cursor-not-allowed"
+                        : isSelected
+                          ? "bg-white text-black font-bold shadow-[0_0_15px_rgba(255,255,255,0.4)]"
+                          : "text-neutral-300 hover:bg-neutral-800 bg-surface-elevated/50"
                         }`}
                       type="button"
                     >
@@ -470,8 +470,8 @@ export default function BookingSection() {
                           key={hour}
                           onClick={() => setSelectedHour(hour)}
                           className={`py-2 rounded text-center text-xs font-mono transition-all border ${selectedHour === hour
-                              ? "bg-white text-black font-bold border-white"
-                              : "border-border-light hover:border-white text-neutral-300 bg-surface-elevated/50"
+                            ? "bg-white text-black font-bold border-white"
+                            : "border-border-light hover:border-white text-neutral-300 bg-surface-elevated/50"
                             }`}
                           type="button"
                         >
@@ -596,7 +596,7 @@ export default function BookingSection() {
                     de citas vía WhatsApp.
                   </span>
                 </label>
-                
+
                 <PushManager phoneNumber={clientPhone} />
               </div>
 
@@ -613,10 +613,10 @@ export default function BookingSection() {
                   whileHover={isLegalAccepted && !isLoading && !bookingMessage ? { scale: 1.02 } : {}}
                   whileTap={isLegalAccepted && !isLoading && !bookingMessage ? { scale: 0.98 } : {}}
                   className={`w-full py-3 rounded font-semibold text-xs tracking-[0.18em] uppercase transition-all flex items-center justify-center gap-2 ${!isLegalAccepted
-                      ? "bg-white/50 text-black/50 cursor-not-allowed"
-                      : bookingMessage
-                        ? "bg-neutral-800 text-white"
-                        : "bg-white text-black hover:bg-neutral-200"
+                    ? "bg-white/50 text-black/50 cursor-not-allowed"
+                    : bookingMessage
+                      ? "bg-neutral-800 text-white"
+                      : "bg-white text-black hover:bg-neutral-200"
                     }`}
                   type="button"
                 >
