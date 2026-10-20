@@ -20,7 +20,7 @@ type AvailableSlot = {
 
 // Entrada unificada para la vista de agenda (slot libre O cita)
 type AgendaEntry =
-  | { kind: "slot"; slot: AvailableSlot; time: string }
+  | { kind: "slot"; slot: AvailableSlot; time: string; isBlocked: boolean; blockedApptId?: string }
   | { kind: "appt"; appt: Appointment; time: string };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -93,6 +93,7 @@ export default function AdminDashboard() {
       const { data, error } = await supabase
         .from("clients")
         .select("id, full_name, phone")
+        .neq("phone", "BLOQUEO")
         .order("full_name", { ascending: true });
       if (!error && data) {
         setAllClients(data);
@@ -284,27 +285,42 @@ export default function AdminDashboard() {
         }
       }
 
-      // Check if slot is already booked
+      // Check if slot is already booked by a real client
       const { data: existingAppts } = await supabase
         .from("appointments")
-        .select("id")
+        .select("id, status")
         .eq("appointment_date", appointmentDate)
         .neq("status", "cancelled");
 
-      if (existingAppts && existingAppts.length > 0) {
-        throw new Error("Este turno ya está ocupado");
+      const realAppt = existingAppts?.find(a => a.status !== "blocked");
+      if (realAppt) {
+        throw new Error("Este turno ya está ocupado por una cita de cliente");
       }
 
-      // Create appointment
-      const { error: apptError } = await supabase
-        .from("appointments")
-        .insert({
-          client_id: targetClientId,
-          appointment_date: appointmentDate,
-          status: "confirmed"
-        });
+      const blockedAppt = existingAppts?.find(a => a.status === "blocked");
+      if (blockedAppt) {
+        // Si el turno estaba bloqueado manualmente, lo actualizamos al nuevo cliente
+        const { error: apptError } = await supabase
+          .from("appointments")
+          .update({
+            client_id: targetClientId,
+            status: "confirmed"
+          })
+          .eq("id", blockedAppt.id);
 
-      if (apptError) throw apptError;
+        if (apptError) throw apptError;
+      } else {
+        // Crear cita nueva
+        const { error: apptError } = await supabase
+          .from("appointments")
+          .insert({
+            client_id: targetClientId,
+            appointment_date: appointmentDate,
+            status: "confirmed"
+          });
+
+        if (apptError) throw apptError;
+      }
 
       // Success
       setAssignModal(prev => ({
@@ -485,15 +501,9 @@ export default function AdminDashboard() {
   };
 
   const handleBlockSlot = async (slotTime: string) => {
-    // Buscar si ya hay un cliente bloqueador (o creamos uno dummy o lo ponemos sin client_id si lo quitamos)
-    // Para simplificar, podemos hacer que 'blocked' no necesite client_id si actualizamos la BD
-    // Pero si client_id es obligatorio en appointments, debemos buscar un client 'Bloqueo'.
-    
-    // Mejor: asumo que la tabla appointments permite client_id nulo para bloqueos, 
-    // pero si da error, buscaremos o crearemos un client de bloqueo.
     const appointmentDate = new Date(`${selectedDate}T${slotTime}:00`).toISOString();
     
-    // Para curarnos en salud, vamos a crear/buscar un cliente "Bloqueo"
+    // Obtener o crear el cliente de bloqueo
     const { data: blockClient } = await supabase
       .from("clients")
       .upsert({ phone: "BLOQUEO", full_name: "Bloqueo Manual" }, { onConflict: "phone" })
@@ -501,18 +511,76 @@ export default function AdminDashboard() {
       .single();
 
     if (!blockClient) {
-      alert("Error: No se pudo crear el cliente de bloqueo");
+      alert("Error: No se pudo crear el registro de bloqueo");
       return;
     }
 
-    const { error } = await supabase.from("appointments").insert({
+    // 1. Idempotencia: comprobar si ya existe una cita en esa fecha y hora
+    const { data: existingAppts } = await supabase
+      .from("appointments")
+      .select("id, status")
+      .eq("appointment_date", appointmentDate);
+
+    if (existingAppts && existingAppts.length > 0) {
+      const existing = existingAppts[0];
+      if (existing.status === "blocked") {
+        // Ya está bloqueada: idempotencia cumplida, no hacer nada más
+        fetchAppointments(selectedDate);
+        return;
+      }
+      // Si la cita existente estaba cancelada u otra, la actualizamos a blocked
+      const { error: updateError } = await supabase
+        .from("appointments")
+        .update({
+          client_id: blockClient.id,
+          status: "blocked"
+        })
+        .eq("id", existing.id);
+
+      if (updateError) {
+        alert("Error al bloquear: " + updateError.message);
+      } else {
+        fetchAppointments(selectedDate);
+      }
+      return;
+    }
+
+    // 2. Si no existía, insertamos la cita de bloqueo
+    const { error: insertError } = await supabase.from("appointments").insert({
       client_id: blockClient.id,
       appointment_date: appointmentDate,
       status: "blocked"
     });
 
+    if (insertError) {
+      // Si hubo colisión concurrente (duplicate key)
+      if (insertError.message.includes("duplicate key") || insertError.code === "23505") {
+        await supabase
+          .from("appointments")
+          .update({ status: "blocked", client_id: blockClient.id })
+          .eq("appointment_date", appointmentDate);
+        fetchAppointments(selectedDate);
+        return;
+      }
+      alert("Error al bloquear: " + insertError.message);
+    } else {
+      fetchAppointments(selectedDate);
+    }
+  };
+
+  const handleUnblockSlot = async (slotTime: string, blockedApptId?: string) => {
+    const appointmentDate = new Date(`${selectedDate}T${slotTime}:00`).toISOString();
+    
+    let query = supabase.from("appointments").delete();
+    if (blockedApptId) {
+      query = query.eq("id", blockedApptId);
+    } else {
+      query = query.eq("appointment_date", appointmentDate).eq("status", "blocked");
+    }
+
+    const { error } = await query;
     if (error) {
-      alert("Error al bloquear: " + error.message);
+      alert("Error al desbloquear: " + error.message);
     } else {
       fetchAppointments(selectedDate);
     }
@@ -933,30 +1001,47 @@ export default function AdminDashboard() {
   };
 
   // ─── Derived: Agenda unificada ─────────────────────────────────────────────
-  // Combina slots + citas en una sola lista cronológica
+  // Combina slots (libres y bloqueados) + citas de clientes en una sola lista cronológica
   const agendaEntries: AgendaEntry[] = (() => {
     const entries: AgendaEntry[] = [];
-    const apptTimes = new Set(appointments.map((a) => formatTime(a.appointment_date)));
-
-    // Añadir slots libres (no tienen cita encima)
-    for (const slot of slots) {
-      const t = slot.slot_time.slice(0, 5);
-      if (!apptTimes.has(t)) {
-        entries.push({ kind: "slot", slot, time: t });
+    
+    // Mapa de citas del día por hora
+    const apptsByTime = new Map<string, Appointment>();
+    for (const appt of appointments) {
+      if (appt.status !== "cancelled") {
+        const t = formatTime(appt.appointment_date);
+        apptsByTime.set(t, appt);
       }
     }
 
-    // Añadir todas las citas
+    // Añadir turnos a LIBRES (tanto completamente libres como con bloqueo manual)
+    for (const slot of slots) {
+      const t = slot.slot_time.slice(0, 5);
+      const apptOnSlot = apptsByTime.get(t);
+
+      if (!apptOnSlot) {
+        // Slot completamente libre
+        entries.push({ kind: "slot", slot, time: t, isBlocked: false });
+      } else if (apptOnSlot.status === "blocked") {
+        // Slot con bloqueo manual: se mantiene en la pestaña LIBRES marcado como Bloqueado
+        entries.push({ kind: "slot", slot, time: t, isBlocked: true, blockedApptId: apptOnSlot.id });
+      }
+      // Si tiene una cita real de cliente (confirmed o no-show), NO se muestra en libres
+    }
+
+    // Añadir SOLO citas de clientes reales a RESERVADAS (excluyendo bloqueos y canceladas)
     for (const appt of appointments) {
-      entries.push({ kind: "appt", appt, time: formatTime(appt.appointment_date) });
+      if (appt.status !== "blocked" && appt.status !== "cancelled") {
+        entries.push({ kind: "appt", appt, time: formatTime(appt.appointment_date) });
+      }
     }
 
     // Ordenar cronológicamente
     return entries.sort((a, b) => a.time.localeCompare(b.time));
   })();
 
-  // Métricas (solo citas de clientes reales)
-  const citasCliente = appointments.filter((a) => a.status !== "blocked");
+  // Métricas (solo citas de clientes reales, excluyendo bloqueos y canceladas)
+  const citasCliente = appointments.filter((a) => a.status !== "blocked" && a.status !== "cancelled");
   const totalCitas = citasCliente.length;
   const citasConfirmadas = citasCliente.filter((a) => a.status !== "no-show").length;
   const faltas = citasCliente.filter((a) => a.status === "no-show").length;
@@ -1316,6 +1401,7 @@ export default function AdminDashboard() {
                       <AnimatePresence>
                         {disponiblesEntries.map((entry, i) => {
                           if (entry.kind !== "slot") return null;
+                          const isBlocked = entry.isBlocked;
                           return (
                             <motion.div
                               key={`slot-${entry.slot.id}`}
@@ -1324,11 +1410,25 @@ export default function AdminDashboard() {
                               animate={{ opacity: 1, y: 0 }}
                               exit={{ opacity: 0, scale: 0.95 }}
                               transition={{ delay: i * 0.03 }}
-                              className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-white/5 border-dashed bg-white/[0.02] opacity-75 hover:opacity-100 transition-opacity"
+                              className={`flex items-center justify-between gap-3 px-4 py-3 rounded-xl border transition-all ${
+                                isBlocked
+                                  ? "bg-white/[0.015] border-white/5 opacity-80"
+                                  : "bg-white/[0.02] border-white/5 border-dashed opacity-75 hover:opacity-100"
+                              }`}
                             >
                               <div className="flex items-center gap-3">
-                                <span className="font-mono text-sm font-bold text-neutral-600 w-12 shrink-0">{entry.time}</span>
-                                <span className="flex-1 text-[10px] text-neutral-400 uppercase tracking-widest font-mono">Libre</span>
+                                <span className={`font-mono text-sm font-bold w-12 shrink-0 ${isBlocked ? "text-neutral-500 line-through decoration-white/20" : "text-neutral-400"}`}>
+                                  {entry.time}
+                                </span>
+                                {isBlocked ? (
+                                  <span className="flex-1 text-[10px] text-neutral-400 uppercase tracking-widest font-mono flex items-center gap-1.5">
+                                    <span className="text-neutral-500">🔒</span> Bloqueado
+                                  </span>
+                                ) : (
+                                  <span className="flex-1 text-[10px] text-neutral-400 uppercase tracking-widest font-mono">
+                                    Libre
+                                  </span>
+                                )}
                               </div>
                               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1 sm:gap-2">
                                 <button
@@ -1348,12 +1448,21 @@ export default function AdminDashboard() {
                                 >
                                   + Asignar
                                 </button>
-                                <button
-                                  onClick={() => handleBlockSlot(entry.time)}
-                                  className="text-[9px] font-mono uppercase text-neutral-500 hover:text-white border border-white/10 hover:border-white/30 px-2 py-1.5 rounded-lg transition-colors text-center"
-                                >
-                                  🔒 Bloquear
-                                </button>
+                                {isBlocked ? (
+                                  <button
+                                    onClick={() => handleUnblockSlot(entry.time, entry.blockedApptId)}
+                                    className="text-[9px] font-mono uppercase bg-white/10 text-white hover:bg-white/20 border border-white/20 px-2.5 py-1.5 rounded-lg transition-colors font-medium text-center flex items-center justify-center gap-1"
+                                  >
+                                    🔓 Desbloquear
+                                  </button>
+                                ) : (
+                                  <button
+                                    onClick={() => handleBlockSlot(entry.time)}
+                                    className="text-[9px] font-mono uppercase text-neutral-500 hover:text-white border border-white/10 hover:border-white/30 px-2 py-1.5 rounded-lg transition-colors text-center"
+                                  >
+                                    🔒 Bloquear
+                                  </button>
+                                )}
                               </div>
                             </motion.div>
                           );
