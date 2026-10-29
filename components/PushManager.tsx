@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import BellToggle from "./BellToggle";
 
 interface PushManagerProps {
   phoneNumber: string;
@@ -137,27 +137,27 @@ export default function PushManager({ phoneNumber, onSubscribeStatus }: PushMana
         <p className="text-xs text-red-400 font-mono mt-1">{errorMsg}</p>
       )}
 
-      {!isSubscribed ? (
-        <motion.button
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          onClick={subscribeToPush}
-          disabled={loading || !phoneNumber}
-          type="button"
-          className={`py-2 px-4 rounded text-xs uppercase tracking-widest font-semibold transition-colors self-start mt-2 ${
-            loading || !phoneNumber
-              ? "bg-white/20 text-white/50 cursor-not-allowed"
-              : "bg-white text-black hover:bg-neutral-200"
-          }`}
-        >
-          {loading ? "Activando..." : "Activar Avisos"}
-        </motion.button>
-      ) : (
-        <div className="flex items-center gap-2 mt-2">
-          <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-          <span className="text-xs text-green-400 font-mono uppercase tracking-widest">Avisos Activados</span>
-        </div>
-      )}
+      <div className="mt-2 self-start">
+        <BellToggle
+          pressed={isSubscribed}
+          disabled={loading}
+          offLabel={loading ? "Activando..." : "Activar Avisos"}
+          onLabel="Avisos Activados"
+          onChange={(pressed) => {
+            if (pressed && !isSubscribed) {
+              subscribeToPush();
+            }
+          }}
+          background="#18181b"
+          color="#f5f5f5"
+          onBackground="#ffffff"
+          onColor="#000000"
+          clapper={true}
+          waves={true}
+          size="sm"
+          radius={12}
+        />
+      </div>
     </div>
   );
 }
