@@ -114,7 +114,7 @@ export default function LookbookSection() {
             gap={32}
             spread={1.12}
             window={3.3}
-            captions={true}
+            captions={false}
             depthFade={0.65}
             fadeColor="#080808"
             cornerRadius={16}
