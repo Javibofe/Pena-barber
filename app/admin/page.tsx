@@ -2407,7 +2407,7 @@ export default function AdminDashboard() {
                         onFocus={() => setShowAssignSuggestions(true)}
                         onBlur={() => setTimeout(() => setShowAssignSuggestions(false), 200)}
                         className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-white font-mono"
-                        placeholder="Ej. Javier"
+                        placeholder="Ej. Carlos"
                       />
                     </div>
                     <div>
@@ -2422,7 +2422,7 @@ export default function AdminDashboard() {
                         onFocus={() => setShowAssignSuggestions(true)}
                         onBlur={() => setTimeout(() => setShowAssignSuggestions(false), 200)}
                         className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-white font-mono"
-                        placeholder="Ej. Bofill"
+                        placeholder="Ej. García"
                       />
                     </div>
                   </div>

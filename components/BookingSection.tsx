@@ -576,7 +576,7 @@ export default function BookingSection() {
                         value={clientFirstName}
                         onChange={(e) => setClientFirstName(e.target.value)}
                         className="w-full bg-surface-elevated border border-border-subtle rounded px-3 py-2 text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-white transition-colors font-mono"
-                        placeholder="Ej. Javier"
+                        placeholder="Ej. Carlos"
                         type="text"
                       />
                     </div>
@@ -588,7 +588,7 @@ export default function BookingSection() {
                         value={clientLastName}
                         onChange={(e) => setClientLastName(e.target.value)}
                         className="w-full bg-surface-elevated border border-border-subtle rounded px-3 py-2 text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-white transition-colors font-mono"
-                        placeholder="Ej. Bofill"
+                        placeholder="Ej. García"
                         type="text"
                       />
                     </div>

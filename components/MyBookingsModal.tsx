@@ -213,7 +213,7 @@ export default function MyBookingsModal({ isOpen, onClose }: MyBookingsModalProp
                     type="text"
                     value={firstName}
                     onChange={(e) => setFirstName(e.target.value)}
-                    placeholder="Ej. Javier"
+                    placeholder="Ej. Carlos"
                     className="w-full bg-[#141414] border border-white/10 rounded px-3 py-1.5 text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-white font-mono"
                   />
                 </div>
@@ -225,7 +225,7 @@ export default function MyBookingsModal({ isOpen, onClose }: MyBookingsModalProp
                     type="text"
                     value={lastName}
                     onChange={(e) => setLastName(e.target.value)}
-                    placeholder="Ej. Bofill"
+                    placeholder="Ej. García"
                     className="w-full bg-[#141414] border border-white/10 rounded px-3 py-1.5 text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-white font-mono"
                   />
                 </div>
