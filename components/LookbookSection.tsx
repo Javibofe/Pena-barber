@@ -42,39 +42,35 @@ export default function LookbookSection() {
         </div>
 
         {/* Muro Drifting 3D de Cortes Reales */}
-        <div className="relative w-full h-[620px] sm:h-[700px] md:h-[760px] flex items-center justify-center overflow-hidden">
+        <div className="relative w-full h-[560px] sm:h-[660px] md:h-[720px] flex items-center justify-center overflow-hidden">
           {/* Viñetas de difuminado superior e inferior */}
-          <div className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-surface-darkest via-surface-darkest/70 to-transparent z-10" />
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-surface-darkest via-surface-darkest/70 to-transparent z-10" />
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-20 sm:h-28 bg-gradient-to-b from-surface-darkest via-surface-darkest/70 to-transparent z-10" />
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 sm:h-28 bg-gradient-to-t from-surface-darkest via-surface-darkest/70 to-transparent z-10" />
 
-          {/* Viñetas laterales */}
-          <div className="pointer-events-none absolute inset-y-0 left-0 w-16 sm:w-28 bg-gradient-to-r from-surface-darkest to-transparent z-10" />
-          <div className="pointer-events-none absolute inset-y-0 right-0 w-16 sm:w-28 bg-gradient-to-l from-surface-darkest to-transparent z-10" />
+          {/* Viñetas laterales (muy sutiles en móvil para no ocultar columnas) */}
+          <div className="pointer-events-none absolute inset-y-0 left-0 w-5 sm:w-24 md:w-32 bg-gradient-to-r from-surface-darkest to-transparent z-10" />
+          <div className="pointer-events-none absolute inset-y-0 right-0 w-5 sm:w-24 md:w-32 bg-gradient-to-l from-surface-darkest to-transparent z-10" />
 
           <DriftWall
             items={CORTE_ITEMS}
-            columns={6}
-            tileWidth={220}
-            tileHeight={285}
-            gap={20}
+            columns={4}
+            tileWidth={195}
+            tileHeight={260}
+            gap={18}
             radius={14}
-            speed={32}
-            tilt={14}
-            turn={-8}
+            speed={28}
+            tilt={12}
+            turn={-7}
             perspective={1200}
-            depth={110}
-            parallax={0.55}
+            depth={100}
+            parallax={0.5}
             fade={0.65}
             dim={0.7}
-            lift={52}
-            offsetX={-85}
+            lift={45}
+            offsetX={-50}
             overlayColor="#080808"
           />
         </div>
-
-        <p className="sm:hidden text-center font-mono text-[10px] text-neutral-500 uppercase tracking-widest mt-4">
-          ✦ Toca cualquier corte para destacarlo en 3D ✦
-        </p>
       </div>
     </section>
   );

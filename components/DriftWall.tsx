@@ -103,6 +103,7 @@ const DriftWall = ({
   const lastTsRef = useRef<number | null>(null);
 
   const [containerHeight, setContainerHeight] = useState(640);
+  const [containerWidth, setContainerWidth] = useState(1200);
   const [activeId, setActiveId] = useState<string | null>(null);
   const activeIdRef = useRef<string | null>(null);
   const [reduced, setReduced] = useState(false);
@@ -115,6 +116,24 @@ const DriftWall = ({
     return () => mq.removeEventListener('change', onChange);
   }, []);
 
+  useIsomorphicLayoutEffect(() => {
+    if (!containerRef.current) return;
+    const ro = new ResizeObserver(([entry]) => {
+      setContainerHeight(entry.contentRect.height || 640);
+      setContainerWidth(entry.contentRect.width || 1200);
+    });
+    ro.observe(containerRef.current);
+    return () => ro.disconnect();
+  }, []);
+
+  const isMobile = containerWidth > 0 && containerWidth < 640;
+  const effectiveTileWidth = isMobile ? Math.min(tileWidth, 142) : tileWidth;
+  const effectiveTileHeight = isMobile ? Math.round(effectiveTileWidth * 1.34) : tileHeight;
+  const effectiveGap = isMobile ? Math.min(gap, 12) : gap;
+  const effectiveOffsetX = isMobile ? 0 : offsetX;
+  const effectiveTurn = isMobile ? -4 : turn;
+  const effectiveLift = isMobile ? 28 : lift;
+
   const columnItems = useMemo<DriftWallItem[][]>(() => {
     const cols: DriftWallItem[][] = Array.from({ length: columns }, () => []);
     items.forEach((item, i) => cols[i % columns].push(item));
@@ -122,22 +141,13 @@ const DriftWall = ({
   }, [items, columns]);
 
   const columnMeta = useMemo<ColumnMeta[]>(() => {
-    const unit = tileHeight + gap;
+    const unit = effectiveTileHeight + effectiveGap;
     return columnItems.map(col => {
       const copyHeight = Math.max(unit, col.length * unit);
       const copies = Math.max(2, Math.ceil((containerHeight * 1.6) / copyHeight) + 1);
       return { copyHeight, copies };
     });
-  }, [columnItems, tileHeight, gap, containerHeight]);
-
-  useIsomorphicLayoutEffect(() => {
-    if (!containerRef.current) return;
-    const ro = new ResizeObserver(([entry]) => {
-      setContainerHeight(entry.contentRect.height || 640);
-    });
-    ro.observe(containerRef.current);
-    return () => ro.disconnect();
-  }, []);
+  }, [columnItems, effectiveTileHeight, effectiveGap, containerHeight]);
 
   const baseVelocities = useMemo<number[]>(() => {
     const dirSign = direction === 'up' ? 1 : -1;
@@ -156,14 +166,15 @@ const DriftWall = ({
     (px: number, py: number) => {
       const plane = planeRef.current;
       if (!plane) return;
-      const xTranslate = offsetX ? `calc(-50% + ${offsetX}px)` : '-50%';
+      const xTranslate = effectiveOffsetX ? `calc(-50% + ${effectiveOffsetX}px)` : '-50%';
       const yTranslate = offsetY ? `calc(-50% + ${offsetY}px)` : '-50%';
+      const scaleVal = isMobile ? 1.05 : 1.18;
       plane.style.transform =
-        `translate(${xTranslate}, ${yTranslate}) scale(1.18) ` +
-        `rotateX(${tilt + py}deg) rotateY(${turn + px}deg) rotateZ(${roll}deg) ` +
+        `translate(${xTranslate}, ${yTranslate}) scale(${scaleVal}) ` +
+        `rotateX(${tilt + py}deg) rotateY(${effectiveTurn + px}deg) rotateZ(${roll}deg) ` +
         `translateZ(${-depth}px)`;
     },
-    [tilt, turn, roll, depth, offsetX, offsetY]
+    [tilt, effectiveTurn, roll, depth, effectiveOffsetX, offsetY, isMobile]
   );
 
   useEffect(() => {
@@ -261,11 +272,11 @@ const DriftWall = ({
   const cssVars = useMemo<CSSProperties>(
     () =>
       ({
-        '--dw-tile-w': `${tileWidth}px`,
-        '--dw-tile-h': `${tileHeight}px`,
-        '--dw-gap': `${gap}px`,
+        '--dw-tile-w': `${effectiveTileWidth}px`,
+        '--dw-tile-h': `${effectiveTileHeight}px`,
+        '--dw-gap': `${effectiveGap}px`,
         '--dw-radius': `${radius}px`,
-        '--dw-lift': `${lift}px`,
+        '--dw-lift': `${effectiveLift}px`,
         '--dw-dim': dim,
         '--dw-gray': grayscale ? 1 : 0,
         '--dw-overlay': overlayColor,
@@ -276,7 +287,7 @@ const DriftWall = ({
         maskImage: maskStyle,
         ...style
       }) as CSSProperties,
-    [tileWidth, tileHeight, gap, radius, lift, dim, grayscale, overlayColor, fade, perspective, maskStyle, style]
+    [effectiveTileWidth, effectiveTileHeight, effectiveGap, radius, effectiveLift, dim, grayscale, overlayColor, fade, perspective, maskStyle, style]
   );
 
   const tileClass = cx(
