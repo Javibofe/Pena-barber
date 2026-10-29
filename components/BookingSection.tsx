@@ -285,22 +285,21 @@ export default function BookingSection() {
         `✓ Cita confirmada para ${fullName} el ${getDisplayDate()} a las ${selectedHour} hs para ${selectedService.name} (${selectedService.price}).`
       );
 
-      // Paso C: Notificar al barbero
-      try {
-        await fetch("/api/notify", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            clientName: fullName,
-            clientPhone: clientPhone.trim(),
-            service: selectedService.name,
-            date: getDisplayDate(),
-            time: selectedHour,
-          }),
-        });
-      } catch (notifyErr) {
+      // Paso C: Notificar al barbero en segundo plano (sin retrasar la confirmación al cliente)
+      fetch("/api/notify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clientName: fullName,
+          clientPhone: clientPhone.trim(),
+          service: selectedService.name,
+          price: selectedService.price,
+          date: getDisplayDate(),
+          time: selectedHour,
+        }),
+      }).catch((notifyErr) => {
         console.error("No se pudo enviar la notificación al barbero", notifyErr);
-      }
+      });
 
     } catch (err: any) {
       setErrorMsg(err.message || "Ha ocurrido un error inesperado.");
