@@ -29,12 +29,16 @@ export default function Footer() {
           <h4 className="text-xs uppercase tracking-widest font-mono text-white mb-3">Horario</h4>
           <ul className="text-xs text-neutral-400 space-y-3 font-light">
             <li className="flex flex-col">
-              <span className="text-white font-medium mb-1">Lunes, Martes y Miercoles</span>
+              <span className="text-white font-medium mb-1">Lunes y Martes</span>
               <span className="font-mono text-neutral-300">15:00 – 20:00</span>
             </li>
             <li className="flex flex-col">
+              <span className="text-white font-medium mb-1">Miércoles</span>
+              <span className="font-mono text-neutral-300">14:30 – 20:00</span>
+            </li>
+            <li className="flex flex-col">
               <span className="text-white font-medium mb-1">Jueves y Viernes</span>
-              <span className="font-mono text-neutral-300">09:00 – 13:30 &nbsp;|&nbsp; 15:00 – 20:00</span>
+              <span className="font-mono text-neutral-300">09:00 – 13:30 &nbsp;|&nbsp; 14:30 – 20:00</span>
             </li>
             <li className="flex flex-col pt-1">
               <span className="text-neutral-500 font-medium mb-1">Sábados y Domingos</span>
